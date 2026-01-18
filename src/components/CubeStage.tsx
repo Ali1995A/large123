@@ -5,11 +5,66 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
 import { chooseUnitForValue, estimateBlockDimensionsCm } from "@/lib/blockLayout";
 
-const BASE_X = 10;
-const BASE_Z = 10;
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function formatLabel(value: bigint) {
+  const s = value.toString();
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function createLabelTexture(text: string) {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, size, size);
+
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  drawRoundedRect(ctx, 18, 86, size - 36, 84, 22);
+  ctx.fill();
+
+  ctx.fillStyle = "#9b1c4b";
+  ctx.font = "700 44px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, size / 2, size / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function computeGrid(count: number) {
+  if (count <= 0) return { gridX: 0, gridZ: 0, layers: 0 };
+  const gridX = Math.min(10, count);
+  const gridZ = count <= 10 ? 1 : Math.min(10, Math.ceil(count / 10));
+  const perLayer = Math.max(1, gridX * gridZ);
+  const layers = Math.ceil(count / perLayer);
+  return { gridX, gridZ, layers };
 }
 
 function buildInstancedUnitBlock({
@@ -21,68 +76,127 @@ function buildInstancedUnitBlock({
   cubeSize: number;
   value: bigint;
 }) {
+  const group = new THREE.Group();
+  parent.add(group);
+
   const unit = chooseUnitForValue(value);
-  const unitCountBig = value / unit.unitValue;
-  const count = Math.max(1, Number(unitCountBig));
+  const count = Math.max(1, Number(unit.unitCount));
 
-  const unitWidth = unit.unitWidthCm * cubeSize;
-  const unitHeight = unit.unitHeightCm * cubeSize;
-  const unitDepth = unit.unitDepthCm * cubeSize;
+  const unitSide = unit.unitSideCm * cubeSize;
+  const geometry = new THREE.BoxGeometry(unitSide, unitSide, unitSide);
 
-  const geometry = new THREE.BoxGeometry(unitWidth, unitHeight, unitDepth);
-  const fill = new THREE.MeshStandardMaterial({
+  const fill = new THREE.MeshPhysicalMaterial({
     color: 0xff5aa5,
-    roughness: 0.35,
-    metalness: 0.05,
+    roughness: 0.28,
+    metalness: 0.02,
+    clearcoat: 0.65,
+    clearcoatRoughness: 0.26,
   });
+  fill.polygonOffset = true;
+  fill.polygonOffsetFactor = 1;
+  fill.polygonOffsetUnits = 1;
+
+  const outlineMat = new THREE.MeshBasicMaterial({
+    color: 0xdb2e7b,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0.9,
+  });
+
   const wire = new THREE.MeshBasicMaterial({
-    color: 0xff9cc9,
+    color: 0xffd1e6,
     wireframe: true,
     transparent: true,
-    opacity: 0.25,
+    opacity: 0.22,
   });
 
-  const mesh = new THREE.InstancedMesh(geometry, fill, count);
+  const mesh = new THREE.InstancedMesh(geometry.clone(), fill, count);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+
+  const outlineMesh = new THREE.InstancedMesh(geometry.clone(), outlineMat, count);
+  outlineMesh.castShadow = false;
+  outlineMesh.receiveShadow = false;
+  outlineMesh.renderOrder = 1;
 
   const wireMesh = new THREE.InstancedMesh(geometry.clone(), wire, count);
   wireMesh.castShadow = false;
   wireMesh.receiveShadow = false;
   wireMesh.renderOrder = 2;
 
-  const halfX = (BASE_X * unitWidth) / 2;
-  const halfZ = (BASE_Z * unitDepth) / 2;
+  const { gridX, gridZ } = computeGrid(count);
+  const halfX = (gridX * unitSide) / 2;
+  const halfZ = (gridZ * unitSide) / 2;
 
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3(1, 1, 1);
+  const outlineScale = new THREE.Vector3(1.055, 1.055, 1.055);
 
   for (let i = 0; i < count; i++) {
-    const layer = Math.floor(i / (BASE_X * BASE_Z));
-    const within = i % (BASE_X * BASE_Z);
-    const x = within % BASE_X;
-    const z = Math.floor(within / BASE_X);
+    const layer = Math.floor(i / (gridX * gridZ));
+    const within = i % (gridX * gridZ);
+    const x = within % gridX;
+    const z = Math.floor(within / gridX);
     const y = layer;
 
     position.set(
-      -halfX + (x + 0.5) * unitWidth,
-      (y + 0.5) * unitHeight,
-      -halfZ + (z + 0.5) * unitDepth,
+      -halfX + (x + 0.5) * unitSide,
+      (y + 0.5) * unitSide,
+      -halfZ + (z + 0.5) * unitSide,
     );
     matrix.compose(position, quaternion, scale);
     mesh.setMatrixAt(i, matrix);
     wireMesh.setMatrixAt(i, matrix);
+
+    matrix.compose(position, quaternion, outlineScale);
+    outlineMesh.setMatrixAt(i, matrix);
   }
 
   mesh.instanceMatrix.needsUpdate = true;
+  outlineMesh.instanceMatrix.needsUpdate = true;
   wireMesh.instanceMatrix.needsUpdate = true;
 
-  parent.add(mesh);
-  parent.add(wireMesh);
+  group.add(mesh);
+  group.add(outlineMesh);
+  group.add(wireMesh);
 
-  return { mesh, wireMesh };
+  let labelMesh: THREE.InstancedMesh | null = null;
+  if (unit.unitValue >= 1000n) {
+    const texture = createLabelTexture(formatLabel(unit.unitValue));
+    if (texture) {
+      const labelGeo = new THREE.PlaneGeometry(unitSide * 0.92, unitSide * 0.92);
+      const labelMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      });
+
+      labelMesh = new THREE.InstancedMesh(labelGeo, labelMat, count);
+      labelMesh.castShadow = false;
+      labelMesh.receiveShadow = false;
+      labelMesh.renderOrder = 3;
+
+      const labelPos = new THREE.Vector3();
+      const labelQuat = new THREE.Quaternion();
+      labelQuat.setFromEuler(new THREE.Euler(0, 0, 0));
+
+      for (let i = 0; i < count; i++) {
+        mesh.getMatrixAt(i, matrix);
+        matrix.decompose(position, quaternion, scale);
+        labelPos.set(position.x, position.y, position.z + unitSide / 2 + cubeSize * 0.03);
+        matrix.compose(labelPos, labelQuat, new THREE.Vector3(1, 1, 1));
+        labelMesh.setMatrixAt(i, matrix);
+      }
+
+      labelMesh.instanceMatrix.needsUpdate = true;
+      group.add(labelMesh);
+    }
+  }
+
+  return group;
 }
 
 function buildAggregateBlock({
@@ -97,28 +211,51 @@ function buildAggregateBlock({
   const width = dimensionsCm.widthCm * cubeSize;
   const depth = dimensionsCm.depthCm * cubeSize;
   const height = dimensionsCm.heightCm * cubeSize;
+  const group = new THREE.Group();
+
   const geometry = new THREE.BoxGeometry(width, 1, depth);
-  const material = new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshPhysicalMaterial({
     color: 0xff5aa5,
-    roughness: 0.35,
-    metalness: 0.05,
+    roughness: 0.3,
+    metalness: 0.02,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.3,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.scale.y = height;
   mesh.position.y = height / 2;
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+  group.add(mesh);
+
+  const outline = new THREE.Mesh(
+    geometry.clone(),
+    new THREE.MeshBasicMaterial({
+      color: 0xdb2e7b,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.9,
+    }),
+  );
+  outline.scale.set(1.02, height, 1.02);
+  outline.position.y = height / 2;
+  outline.renderOrder = 1;
+  outline.castShadow = false;
+  outline.receiveShadow = false;
+  group.add(outline);
 
   const edges = new THREE.EdgesGeometry(geometry);
   const edgeLines = new THREE.LineSegments(
     edges,
     new THREE.LineBasicMaterial({ color: 0xff9cc9, transparent: true, opacity: 0.75 }),
   );
+  edgeLines.scale.y = height;
+  edgeLines.position.y = height / 2;
   edgeLines.renderOrder = 2;
-  mesh.add(edgeLines);
+  group.add(edgeLines);
 
-  parent.add(mesh);
-  return mesh;
+  parent.add(group);
+  return group;
 }
 
 function buildReference({
@@ -331,6 +468,9 @@ export function CubeStage({
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
 
@@ -383,7 +523,6 @@ export function CubeStage({
 
     let currentBlock: THREE.Object3D | null = null;
     let currentReference: THREE.Object3D | null = null;
-    let currentWire: THREE.Object3D | null = null;
 
     const setSize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -467,16 +606,12 @@ export function CubeStage({
 
     const cubeSize = sceneScale;
     const unit = chooseUnitForValue(value);
-    const unitCount = value / unit.unitValue;
-    const canInstance = unitCount > 0n && unitCount <= 10_000n;
+    const canInstance = unit.unitCount > 0n && unit.unitCount <= 10_000n;
 
     if (canInstance) {
-      const built = buildInstancedUnitBlock({ parent: world, cubeSize, value });
-      currentBlock = built.mesh;
-      currentWire = built.wireMesh;
+      currentBlock = buildInstancedUnitBlock({ parent: world, cubeSize, value });
     } else {
       currentBlock = buildAggregateBlock({ parent: world, cubeSize, dimensionsCm: dims });
-      currentWire = null;
     }
 
     currentReference = buildReference({ parent: world, cubeSize, reference });
@@ -504,16 +639,6 @@ export function CubeStage({
       if (currentBlock) {
         world.remove(currentBlock);
         currentBlock.traverse((obj) => {
-          if (obj instanceof THREE.Mesh || obj instanceof THREE.InstancedMesh) {
-            obj.geometry?.dispose?.();
-            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
-            else obj.material?.dispose?.();
-          }
-        });
-      }
-      if (currentWire) {
-        world.remove(currentWire);
-        currentWire.traverse((obj) => {
           if (obj instanceof THREE.Mesh || obj instanceof THREE.InstancedMesh) {
             obj.geometry?.dispose?.();
             if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());

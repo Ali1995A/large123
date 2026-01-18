@@ -7,52 +7,68 @@ export type BlockDimensionsCm = {
 
 export type UnitDimensionsCm = {
   unitValue: bigint;
-  unitWidthCm: number;
-  unitHeightCm: number;
-  unitDepthCm: number;
+  unitSideCm: number;
+  unitCount: bigint;
 };
 
 const MAX_UNIT_INSTANCES = 10_000n;
 
-function pow10(exp: number): bigint {
+function isPowerOf1000(value: bigint) {
+  if (value < 1n) return false;
+  let v = value;
+  while (v % 1000n === 0n) v /= 1000n;
+  return v === 1n;
+}
+
+function power1000(exp: number) {
   let out = 1n;
-  for (let i = 0; i < exp; i++) out *= 10n;
+  for (let i = 0; i < exp; i++) out *= 1000n;
   return out;
+}
+
+function log1000FloorFromDigits(value: bigint) {
+  const digitsMinus1 = Math.max(0, value.toString().length - 1);
+  return Math.floor(digitsMinus1 / 3);
 }
 
 export function chooseUnitForValue(value: bigint): UnitDimensionsCm {
   if (value <= 0n) {
-    return { unitValue: 1n, unitWidthCm: 1, unitHeightCm: 1, unitDepthCm: 1 };
+    return { unitValue: 1n, unitSideCm: 1, unitCount: 0n };
   }
 
-  // Prefer "cubic" units: 1, 1000, 1,000,000, ... so that:
-  // 10,000 = 10 × (1000-cube), 100,000 = 100 × (1000-cube), etc.
-  const digitsMinus1 = Math.max(0, value.toString().length - 1);
-  let unitExp = value < 10_000n ? 0 : Math.floor(digitsMinus1 / 3) * 3;
-  let unitValue = pow10(unitExp);
+  // If value is exactly 1000^k, render it as 1000 cubes of the previous unit first.
+  // Example: 1000 => 1000×1, 1,000,000 => 1000×1000, ...
+  if (value >= 1000n && isPowerOf1000(value)) {
+    const k = log1000FloorFromDigits(value);
+    const unitValue = power1000(Math.max(0, k - 1));
+    const sideExp = Math.max(0, k - 1);
+    return { unitValue, unitSideCm: 10 ** sideExp, unitCount: 1000n };
+  }
 
-  while (value / unitValue > MAX_UNIT_INSTANCES) {
-    unitExp += 3;
+  const k = log1000FloorFromDigits(value);
+  let unitValue = power1000(k);
+  let unitCount = value / unitValue;
+
+  while (unitCount > MAX_UNIT_INSTANCES) {
     unitValue *= 1000n;
+    unitCount = value / unitValue;
   }
 
-  const sideExp = Math.floor(unitExp / 3);
-  const sideCm = 10 ** sideExp;
-  return { unitValue, unitWidthCm: sideCm, unitHeightCm: sideCm, unitDepthCm: sideCm };
+  return { unitValue, unitSideCm: 10 ** k, unitCount };
 }
 
 export function estimateBlockDimensionsCm(value: bigint): BlockDimensionsCm {
-  const { unitValue, unitWidthCm, unitHeightCm, unitDepthCm } = chooseUnitForValue(value);
-  const unitCount = value / unitValue;
+  const { unitSideCm, unitCount } = chooseUnitForValue(value);
+  const count = unitCount === 0n ? 0 : Number(unitCount);
 
-  const baseX = 10;
-  const baseZ = 10;
-  const perLayer = BigInt(baseX * baseZ);
-  const layers = unitCount === 0n ? 0 : Number((unitCount + perLayer - 1n) / perLayer);
+  const gridX = count <= 0 ? 0 : Math.min(10, count);
+  const gridZ = count <= 10 ? 1 : Math.min(10, Math.ceil(count / 10));
+  const perLayer = Math.max(1, gridX * gridZ);
+  const layers = count <= 0 ? 0 : Math.ceil(count / perLayer);
 
-  const widthCm = baseX * unitWidthCm;
-  const depthCm = baseZ * unitDepthCm;
-  const heightCm = Math.max(1, layers) * unitHeightCm;
+  const widthCm = gridX * unitSideCm;
+  const depthCm = gridZ * unitSideCm;
+  const heightCm = Math.max(1, layers) * unitSideCm;
   const maxCm = Math.max(widthCm, heightCm, depthCm);
 
   return { widthCm, heightCm, depthCm, maxCm };
