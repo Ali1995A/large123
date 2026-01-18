@@ -490,10 +490,18 @@ export function CubeStage({
     world.add(floor);
 
     const grid = new THREE.GridHelper(1200, 60, 0xffb7d5, 0xffd1e6);
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.22;
+    const gridMat = grid.material as THREE.Material;
+    gridMat.transparent = true;
+    gridMat.opacity = 0.16;
     grid.position.y = 0.01;
     world.add(grid);
+
+    const microGrid = new THREE.GridHelper(1200, 240, 0xffcfe3, 0xffe3f0);
+    const microMat = microGrid.material as THREE.Material;
+    microMat.transparent = true;
+    microMat.opacity = 0.06;
+    microGrid.position.y = 0.015;
+    world.add(microGrid);
 
     const rimGeo = new THREE.TorusGeometry(6, 0.35, 10, 60);
     const rimMat = new THREE.MeshStandardMaterial({
