@@ -511,6 +511,34 @@ function buildReference({
     const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, capH, d * 1.02), white);
     cap.position.y = body.position.y + towerH / 2 + capH / 2;
     add(cap);
+  } else if (kind === "tower") {
+    const w = sizeFromHeight(0.16, 12, 0.26);
+    const d = sizeFromHeight(0.16, 10, 0.24);
+
+    const baseH = Math.max(height * 0.07, 1.8 * cubeSize);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w * 1.28, baseH, d * 1.28), darker);
+    base.position.y = baseH / 2 + 0.5 * cubeSize;
+    add(base);
+
+    const shaftH = Math.max(height * 0.78, 4 * cubeSize);
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, shaftH, d), pink);
+    shaft.position.y = base.position.y + baseH / 2 + shaftH / 2;
+    add(shaft);
+
+    const crownH = Math.max(height * 0.1, 2.2 * cubeSize);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, crownH, d * 1.05), white);
+    crown.position.y = shaft.position.y + shaftH / 2 + crownH / 2;
+    add(crown);
+
+    const antennaH = Math.max(height * 0.05, 2.5 * cubeSize);
+    const antennaR = Math.max(0.25 * cubeSize, w * 0.08);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(antennaR, antennaR, antennaH, 14), darker);
+    antenna.position.y = crown.position.y + crownH / 2 + antennaH / 2;
+    add(antenna);
+
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.55 * cubeSize, antennaR * 1.6), 16, 12), white);
+    tip.position.y = antenna.position.y + antennaH / 2 + (tip.geometry as THREE.SphereGeometry).parameters.radius;
+    add(tip);
   } else if (kind === "mountain") {
     const baseR = sizeFromHeight(0.62, 18, 0.9);
     const baseH = Math.max(height * 0.06, 1.2 * cubeSize);

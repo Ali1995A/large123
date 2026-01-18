@@ -14,6 +14,7 @@ export type ReferenceObject = {
     | "bus"
     | "house"
     | "building"
+    | "tower"
     | "tree"
     | "mountain"
     | "earth"
@@ -33,6 +34,8 @@ const REFERENCES: ReferenceObject[] = [
   { id: "house", name: "小房子", heightCm: 600, kind: "house" },
   { id: "tree", name: "大树", heightCm: 1200, kind: "tree" },
   { id: "building", name: "大楼", heightCm: 6000, kind: "building" },
+  { id: "tower", name: "摩天楼", heightCm: 15000, kind: "tower" },
+  { id: "megaTower", name: "超高楼", heightCm: 60000, kind: "tower" },
   { id: "mountain", name: "高山", heightCm: 884800, kind: "mountain" },
   { id: "earth", name: "地球直径", heightCm: 1274200000, kind: "earth" },
   { id: "moonDistance", name: "地月距离", heightCm: 38440000000, kind: "moonDistance" },
