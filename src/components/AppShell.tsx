@@ -5,6 +5,7 @@ import { NUMBER_STEPS } from "@/lib/steps";
 import { chooseReference } from "@/lib/references";
 import { useChineseSpeech } from "@/hooks/useChineseSpeech";
 import { CubeStage } from "@/components/CubeStage";
+import { estimateBlockDimensionsCm } from "@/lib/blockLayout";
 
 function Icon({
   path,
@@ -32,8 +33,8 @@ function Icon({
 export function AppShell() {
   const [index, setIndex] = useState(0);
   const step = NUMBER_STEPS[index]!;
-  const heightCm = step.value === 1n ? 1 : Number(step.value / 100n);
-  const reference = useMemo(() => chooseReference(heightCm), [heightCm]);
+  const sizeCm = useMemo(() => estimateBlockDimensionsCm(step.value).maxCm, [step.value]);
+  const reference = useMemo(() => chooseReference(sizeCm), [sizeCm]);
 
   const { hasUserGesture, unlock, speak } = useChineseSpeech();
 

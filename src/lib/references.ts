@@ -24,4 +24,3 @@ export function chooseReference(heightCm: number): ReferenceObject {
   }
   return REFERENCES[REFERENCES.length - 1]!;
 }
-

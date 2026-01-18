@@ -3,8 +3,8 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
+import { chooseUnitForValue, estimateBlockDimensionsCm } from "@/lib/blockLayout";
 
-const MAX_INSTANCES = 100_000n;
 const BASE_X = 10;
 const BASE_Z = 10;
 
@@ -12,12 +12,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function getHeightCmFromValue(value: bigint) {
-  if (value === 1n) return 1;
-  return Number(value / 100n);
-}
-
-function buildInstancedCubeBlock({
+function buildInstancedUnitBlock({
   parent,
   cubeSize,
   value,
@@ -26,68 +21,82 @@ function buildInstancedCubeBlock({
   cubeSize: number;
   value: bigint;
 }) {
-  const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-  const material = new THREE.MeshStandardMaterial({
+  const unit = chooseUnitForValue(value);
+  const unitCountBig = value / unit.unitValue;
+  const count = Math.max(1, Number(unitCountBig));
+
+  const unitWidth = unit.unitWidthCm * cubeSize;
+  const unitHeight = unit.unitHeightCm * cubeSize;
+  const unitDepth = unit.unitDepthCm * cubeSize;
+
+  const geometry = new THREE.BoxGeometry(unitWidth, unitHeight, unitDepth);
+  const fill = new THREE.MeshStandardMaterial({
     color: 0xff5aa5,
     roughness: 0.35,
     metalness: 0.05,
   });
+  const wire = new THREE.MeshBasicMaterial({
+    color: 0xff9cc9,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.25,
+  });
 
-  const count = value === 1n ? 1 : Number(value);
-  const mesh = new THREE.InstancedMesh(geometry, material, count);
+  const mesh = new THREE.InstancedMesh(geometry, fill, count);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
 
-  const halfX = (BASE_X * cubeSize) / 2;
-  const halfZ = (BASE_Z * cubeSize) / 2;
+  const wireMesh = new THREE.InstancedMesh(geometry.clone(), wire, count);
+  wireMesh.castShadow = false;
+  wireMesh.receiveShadow = false;
+  wireMesh.renderOrder = 2;
+
+  const halfX = (BASE_X * unitWidth) / 2;
+  const halfZ = (BASE_Z * unitDepth) / 2;
+
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3(1, 1, 1);
 
   for (let i = 0; i < count; i++) {
-    let x = 0;
-    let y = 0;
-    let z = 0;
-
-    if (value === 1n) {
-      x = 0;
-      y = 0;
-      z = 0;
-    } else {
-      const layer = Math.floor(i / (BASE_X * BASE_Z));
-      const within = i % (BASE_X * BASE_Z);
-      x = within % BASE_X;
-      z = Math.floor(within / BASE_X);
-      y = layer;
-    }
+    const layer = Math.floor(i / (BASE_X * BASE_Z));
+    const within = i % (BASE_X * BASE_Z);
+    const x = within % BASE_X;
+    const z = Math.floor(within / BASE_X);
+    const y = layer;
 
     position.set(
-      -halfX + (x + 0.5) * cubeSize,
-      (y + 0.5) * cubeSize,
-      -halfZ + (z + 0.5) * cubeSize,
+      -halfX + (x + 0.5) * unitWidth,
+      (y + 0.5) * unitHeight,
+      -halfZ + (z + 0.5) * unitDepth,
     );
     matrix.compose(position, quaternion, scale);
     mesh.setMatrixAt(i, matrix);
+    wireMesh.setMatrixAt(i, matrix);
   }
 
   mesh.instanceMatrix.needsUpdate = true;
+  wireMesh.instanceMatrix.needsUpdate = true;
+
   parent.add(mesh);
-  return mesh;
+  parent.add(wireMesh);
+
+  return { mesh, wireMesh };
 }
 
 function buildAggregateBlock({
   parent,
   cubeSize,
-  heightCm,
+  dimensionsCm,
 }: {
   parent: THREE.Object3D;
   cubeSize: number;
-  heightCm: number;
+  dimensionsCm: { widthCm: number; heightCm: number; depthCm: number };
 }) {
-  const width = BASE_X * cubeSize;
-  const depth = BASE_Z * cubeSize;
-  const height = heightCm * cubeSize;
+  const width = dimensionsCm.widthCm * cubeSize;
+  const depth = dimensionsCm.depthCm * cubeSize;
+  const height = dimensionsCm.heightCm * cubeSize;
   const geometry = new THREE.BoxGeometry(width, 1, depth);
   const material = new THREE.MeshStandardMaterial({
     color: 0xff5aa5,
@@ -148,12 +157,12 @@ export function CubeStage({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  const heightCm = useMemo(() => getHeightCmFromValue(value), [value]);
+  const dims = useMemo(() => estimateBlockDimensionsCm(value), [value]);
   const targetMaxHeightUnits = 120;
   const sceneScale = useMemo(() => {
-    const rawMax = Math.max(heightCm, reference.heightCm);
+    const rawMax = Math.max(dims.maxCm, reference.heightCm);
     return clamp(targetMaxHeightUnits / rawMax, 0.000000000000001, 8);
-  }, [heightCm, reference.heightCm]);
+  }, [dims.maxCm, reference.heightCm]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -210,6 +219,7 @@ export function CubeStage({
 
     let currentBlock: THREE.Object3D | null = null;
     let currentReference: THREE.Object3D | null = null;
+    let currentWire: THREE.Object3D | null = null;
 
     const setSize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -292,16 +302,22 @@ export function CubeStage({
     };
 
     const cubeSize = sceneScale;
-    const maxInstancesAllowed = value === 1n ? 1n : value;
+    const unit = chooseUnitForValue(value);
+    const unitCount = value / unit.unitValue;
+    const canInstance = unitCount > 0n && unitCount <= 10_000n;
 
-    currentBlock =
-      maxInstancesAllowed <= MAX_INSTANCES
-        ? buildInstancedCubeBlock({ parent: world, cubeSize, value })
-        : buildAggregateBlock({ parent: world, cubeSize, heightCm });
+    if (canInstance) {
+      const built = buildInstancedUnitBlock({ parent: world, cubeSize, value });
+      currentBlock = built.mesh;
+      currentWire = built.wireMesh;
+    } else {
+      currentBlock = buildAggregateBlock({ parent: world, cubeSize, dimensionsCm: dims });
+      currentWire = null;
+    }
 
     currentReference = buildReference({ parent: world, cubeSize, reference });
 
-    const maxHeightUnits = Math.max(heightCm, reference.heightCm) * cubeSize;
+    const maxHeightUnits = Math.max(dims.heightCm, reference.heightCm) * cubeSize;
     camera.position.set(95, Math.max(70, maxHeightUnits * 0.75), 170);
     camera.lookAt(new THREE.Vector3(0, maxHeightUnits * 0.35, 0));
     render();
@@ -331,6 +347,16 @@ export function CubeStage({
           }
         });
       }
+      if (currentWire) {
+        world.remove(currentWire);
+        currentWire.traverse((obj) => {
+          if (obj instanceof THREE.Mesh || obj instanceof THREE.InstancedMesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
+            else obj.material?.dispose?.();
+          }
+        });
+      }
       if (currentReference) {
         world.remove(currentReference);
         currentReference.traverse((obj) => {
@@ -343,7 +369,7 @@ export function CubeStage({
       }
       renderer.dispose();
     };
-  }, [heightCm, reference, sceneScale, value]);
+  }, [dims, reference, sceneScale, value]);
 
   return (
     <canvas
