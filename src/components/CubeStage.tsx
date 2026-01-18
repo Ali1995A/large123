@@ -5,7 +5,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
-import { chooseUnitForValue, computeGridForCount, estimateBlockDimensionsCm } from "@/lib/blockLayout";
+import { chooseUnitForValue, computeGridForCount, estimateBlockDimensionsCm, getExactPower1000Exponent } from "@/lib/blockLayout";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -847,6 +847,8 @@ export function CubeStage({
   } | null>(null);
 
   const dims = useMemo(() => estimateBlockDimensionsCm(value), [value]);
+  const unit = useMemo(() => chooseUnitForValue(value), [value]);
+  const exactPowerExp = useMemo(() => getExactPower1000Exponent(value), [value]);
   const targetMaxHeightUnits = 120;
   const sceneScale = useMemo(() => {
     const rawMax = Math.max(dims.maxCm, reference.heightCm);
@@ -946,6 +948,7 @@ export function CubeStage({
 
     let currentBlock: THREE.Object3D | null = null;
     let currentReference: THREE.Object3D | null = null;
+    let currentUnitCube: THREE.Object3D | null = null;
 
     const setSize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -1121,6 +1124,7 @@ export function CubeStage({
 
     const cubeSize = sceneScale;
     const unit = chooseUnitForValue(value);
+    const exp = getExactPower1000Exponent(value);
     const canInstance = unit.unitCount > 0n && unit.unitCount <= 10_000n;
 
     if (canInstance) {
@@ -1133,6 +1137,87 @@ export function CubeStage({
     const offsetX = blockHalfWidth + 14 * cubeSize;
     rim.position.x = offsetX;
     currentReference = buildReference({ parent: world, cubeSize, reference });
+
+    // When the value is exactly 1000^k, also show the “collapsed” unit cube for this step.
+    // This prevents the next step from feeling like cubes suddenly disappear: the kid sees
+    // 1000 small cubes becoming 1 bigger cube, then the next step uses that bigger cube.
+    if (exp !== null && exp > 0) {
+      const collapsedSideCm = 10 ** exp;
+      const collapsedSide = collapsedSideCm * cubeSize;
+      const bevel = Math.max(collapsedSide * 0.09, cubeSize * 0.12);
+      const geo = new RoundedBoxGeometry(collapsedSide, collapsedSide, collapsedSide, 4, bevel);
+      const fill = new THREE.MeshPhysicalMaterial({
+        color: 0xff7dbb,
+        roughness: 0.26,
+        metalness: 0.02,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.25,
+      });
+      const cube = new THREE.Mesh(geo, fill);
+      cube.castShadow = true;
+      cube.receiveShadow = false;
+      cube.position.set(
+        -(blockHalfWidth + collapsedSide / 2 + 18 * cubeSize),
+        collapsedSide / 2,
+        0,
+      );
+      world.add(cube);
+
+      const outline = new THREE.Mesh(
+        geo.clone(),
+        new THREE.MeshBasicMaterial({
+          color: 0xdb2e7b,
+          side: THREE.BackSide,
+          transparent: true,
+          opacity: 0.88,
+        }),
+      );
+      outline.position.copy(cube.position);
+      outline.scale.set(1.055, 1.055, 1.055);
+      outline.renderOrder = 1;
+      world.add(outline);
+
+      const tex = getFaceGridTexture10();
+      if (tex) {
+        const gridMat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        });
+        const grid = new THREE.Mesh(geo.clone(), gridMat);
+        grid.position.copy(cube.position);
+        grid.renderOrder = 2;
+        world.add(grid);
+
+        const labelTex = createLabelTexture(formatLabel(value));
+        if (labelTex) {
+          const labelGeo = new THREE.PlaneGeometry(collapsedSide * 0.92, collapsedSide * 0.92);
+          const labelMat = new THREE.MeshBasicMaterial({
+            map: labelTex,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+          });
+          const label = new THREE.Mesh(labelGeo, labelMat);
+          label.position.set(cube.position.x, cube.position.y, cube.position.z + collapsedSide / 2 + cubeSize * 0.03);
+          label.renderOrder = 3;
+          world.add(label);
+
+          currentUnitCube = new THREE.Group();
+          currentUnitCube.add(cube, outline, grid, label);
+        } else {
+          currentUnitCube = new THREE.Group();
+          currentUnitCube.add(cube, outline, grid);
+        }
+      } else {
+        currentUnitCube = new THREE.Group();
+        currentUnitCube.add(cube, outline);
+      }
+    }
 
     // Place reference to the right of the block using its actual bounds (prevents overlap even when proportions change).
     const refBounds = new THREE.Box3().setFromObject(currentReference);
@@ -1148,6 +1233,7 @@ export function CubeStage({
     const c = new THREE.Vector3();
     const size = new THREE.Vector3();
     if (currentBlock) bounds.expandByObject(currentBlock);
+    if (currentUnitCube) bounds.expandByObject(currentUnitCube);
     if (currentReference) bounds.expandByObject(currentReference);
     bounds.getCenter(c);
     bounds.getSize(size);
@@ -1199,6 +1285,16 @@ export function CubeStage({
           }
         });
       }
+      if (currentUnitCube) {
+        world.remove(currentUnitCube);
+        currentUnitCube.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.geometry?.dispose?.();
+            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
+            else obj.material?.dispose?.();
+          }
+        });
+      }
       scene.environment?.dispose?.();
       pmrem.dispose();
       renderer.dispose();
@@ -1217,6 +1313,20 @@ export function CubeStage({
         className="block h-full w-full touch-none"
         aria-label="3D 体块对比"
       />
+
+      <div className="pointer-events-none absolute left-3 top-3 rounded-2xl bg-white/75 px-3 py-2 text-sm font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 backdrop-blur">
+        {exactPowerExp !== null && exactPowerExp > 0 ? (
+          <div className="flex flex-col gap-0.5">
+            <div>展开：1000 × {formatLabel(unit.unitValue)}</div>
+            <div>合成：1 × {formatLabel(value)}</div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            <div>{formatLabel(unit.unitCount)} 个方块</div>
+            <div>每个 = {formatLabel(unit.unitValue)}</div>
+          </div>
+        )}
+      </div>
 
       <div className="pointer-events-auto absolute bottom-3 left-3 flex gap-2">
         <button

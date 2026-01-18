@@ -31,6 +31,12 @@ function log1000FloorFromDigits(value: bigint) {
   return Math.floor(digitsMinus1 / 3);
 }
 
+export function getExactPower1000Exponent(value: bigint): number | null {
+  if (value < 1n) return null;
+  if (!isPowerOf1000(value)) return null;
+  return log1000FloorFromDigits(value);
+}
+
 export function computeGridForCount(count: number) {
   if (count <= 0) return { gridX: 0, gridZ: 0, layers: 0 };
 
