@@ -5,7 +5,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
-import { chooseUnitForValue, estimateBlockDimensionsCm } from "@/lib/blockLayout";
+import { chooseUnitForValue, computeGridForCount, estimateBlockDimensionsCm } from "@/lib/blockLayout";
 import { ReferenceSvg } from "@/components/ReferenceSvg";
 
 function clamp(value: number, min: number, max: number) {
@@ -61,15 +61,6 @@ function createLabelTexture(text: string) {
   return texture;
 }
 
-function computeGrid(count: number) {
-  if (count <= 0) return { gridX: 0, gridZ: 0, layers: 0 };
-  const gridX = Math.min(10, count);
-  const gridZ = count <= 10 ? 1 : Math.min(10, Math.ceil(count / 10));
-  const perLayer = Math.max(1, gridX * gridZ);
-  const layers = Math.ceil(count / perLayer);
-  return { gridX, gridZ, layers };
-}
-
 function buildInstancedUnitBlock({
   parent,
   cubeSize,
@@ -116,7 +107,7 @@ function buildInstancedUnitBlock({
   outlineMesh.receiveShadow = false;
   outlineMesh.renderOrder = 1;
 
-  const { gridX, gridZ } = computeGrid(count);
+  const { gridX, gridZ } = computeGridForCount(count);
   const halfX = (gridX * unitSide) / 2;
   const halfZ = (gridZ * unitSide) / 2;
 

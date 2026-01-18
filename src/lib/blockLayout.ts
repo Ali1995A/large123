@@ -31,6 +31,40 @@ function log1000FloorFromDigits(value: bigint) {
   return Math.floor(digitsMinus1 / 3);
 }
 
+export function computeGridForCount(count: number) {
+  if (count <= 0) return { gridX: 0, gridZ: 0, layers: 0 };
+
+  // Canonical shapes for the kid-friendly story:
+  // 100 is a 10×10 plate; 1000 is a 10×10×10 cube.
+  if (count === 100) return { gridX: 10, gridZ: 10, layers: 1 };
+  if (count === 1000) return { gridX: 10, gridZ: 10, layers: 10 };
+
+  // 10 should feel like “10 pieces” but not become a long thin bar.
+  if (count === 10) return { gridX: 5, gridZ: 2, layers: 1 };
+
+  let best: { gridX: number; gridZ: number; layers: number } | null = null;
+  let bestScore: [number, number, number, number] | null = null;
+
+  for (let gridX = 1; gridX <= 10; gridX++) {
+    for (let gridZ = 1; gridZ <= 10; gridZ++) {
+      const perLayer = gridX * gridZ;
+      const layers = Math.ceil(count / perLayer);
+      const maxDim = Math.max(gridX, gridZ, layers);
+      const balance =
+        Math.abs(gridX - gridZ) + Math.abs(gridX - layers) + Math.abs(gridZ - layers);
+      const waste = perLayer * layers - count;
+      const footprint = perLayer;
+      const score: [number, number, number, number] = [maxDim, balance, waste, footprint];
+      if (!bestScore || score < bestScore) {
+        bestScore = score;
+        best = { gridX, gridZ, layers };
+      }
+    }
+  }
+
+  return best ?? { gridX: 10, gridZ: 10, layers: Math.ceil(count / 100) };
+}
+
 export function chooseUnitForValue(value: bigint): UnitDimensionsCm {
   if (value <= 0n) {
     return { unitValue: 1n, unitSideCm: 1, unitCount: 0n };
@@ -61,10 +95,7 @@ export function estimateBlockDimensionsCm(value: bigint): BlockDimensionsCm {
   const { unitSideCm, unitCount } = chooseUnitForValue(value);
   const count = unitCount === 0n ? 0 : Number(unitCount);
 
-  const gridX = count <= 0 ? 0 : Math.min(10, count);
-  const gridZ = count <= 10 ? 1 : Math.min(10, Math.ceil(count / 10));
-  const perLayer = Math.max(1, gridX * gridZ);
-  const layers = count <= 0 ? 0 : Math.ceil(count / perLayer);
+  const { gridX, gridZ, layers } = computeGridForCount(count);
 
   const widthCm = gridX * unitSideCm;
   const depthCm = gridZ * unitSideCm;
