@@ -418,6 +418,11 @@ export function CubeStage({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const zoomRef = useRef(1);
+  const zoomApiRef = useRef<{
+    nudge: (multiplier: number) => void;
+    reset: () => void;
+  } | null>(null);
 
   const dims = useMemo(() => estimateBlockDimensionsCm(value), [value]);
   const referenceRatio = useMemo(() => {
@@ -441,7 +446,7 @@ export function CubeStage({
       alpha: true,
       powerPreference: "high-performance",
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -522,33 +527,74 @@ export function CubeStage({
     window.addEventListener("resize", setSize, { passive: true });
 
     let spin = 0;
-    let dragging = false;
     let lastX = 0;
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    const baseTarget = new THREE.Vector3(0, 0, 0);
+    const basePos = new THREE.Vector3(90, 90, 162);
 
-    const onDragStart = (clientX: number) => {
-      dragging = true;
-      lastX = clientX;
+    const clampZoom = (z: number) => clamp(z, 0.55, 3.2);
+    const applyZoom = () => {
+      const zoom = zoomRef.current;
+      const dir = basePos.clone().sub(baseTarget);
+      camera.position.copy(baseTarget.clone().add(dir.multiplyScalar(zoom)));
+      camera.lookAt(baseTarget);
     };
-    const onDragMove = (clientX: number) => {
-      if (!dragging) return;
-      const delta = clientX - lastX;
-      lastX = clientX;
-      spin += delta * 0.008;
-    };
-    const onDragEnd = () => {
-      dragging = false;
+    zoomApiRef.current = {
+      nudge: (multiplier: number) => {
+        zoomRef.current = clampZoom(zoomRef.current * multiplier);
+        applyZoom();
+      },
+      reset: () => {
+        zoomRef.current = 1;
+        applyZoom();
+      },
     };
 
     const supportsPointer = "PointerEvent" in window;
     const onPointerDown = (e: PointerEvent) => {
-      onDragStart(e.clientX);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 1) {
+        lastX = e.clientX;
+      } else if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        pinchStartDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        pinchStartZoom = zoomRef.current;
+      }
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch {}
     };
-    const onPointerMove = (e: PointerEvent) => onDragMove(e.clientX);
+    const onPointerMove = (e: PointerEvent) => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 1) {
+        const delta = e.clientX - lastX;
+        lastX = e.clientX;
+        spin += delta * 0.008;
+        return;
+      }
+
+      if (activePointers.size === 2) {
+        const pts = Array.from(activePointers.values());
+        const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        if (pinchStartDist > 0) {
+          const scale = dist / pinchStartDist;
+          zoomRef.current = clampZoom(pinchStartZoom / scale);
+          applyZoom();
+        }
+      }
+    };
     const onPointerUp = (e: PointerEvent) => {
-      onDragEnd();
+      activePointers.delete(e.pointerId);
+      if (activePointers.size === 1) {
+        const only = Array.from(activePointers.values())[0]!;
+        lastX = only.x;
+      } else if (activePointers.size === 0) {
+        pinchStartDist = 0;
+      }
       try {
         canvas.releasePointerCapture(e.pointerId);
       } catch {}
@@ -556,14 +602,16 @@ export function CubeStage({
 
     const onTouchStart = (e: TouchEvent) => {
       if (!e.touches[0]) return;
-      onDragStart(e.touches[0].clientX);
+      lastX = e.touches[0].clientX;
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!e.touches[0]) return;
-      onDragMove(e.touches[0].clientX);
+      const delta = e.touches[0].clientX - lastX;
+      lastX = e.touches[0].clientX;
+      spin += delta * 0.008;
       e.preventDefault();
     };
-    const onTouchEnd = () => onDragEnd();
+    const onTouchEnd = () => {};
 
     if (supportsPointer) {
       canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
@@ -576,6 +624,14 @@ export function CubeStage({
       canvas.addEventListener("touchend", onTouchEnd, { passive: true });
       canvas.addEventListener("touchcancel", onTouchEnd, { passive: true });
     }
+
+    const onWheel = (e: WheelEvent) => {
+      const delta = Math.sign(e.deltaY);
+      if (!delta) return;
+      zoomRef.current = clampZoom(zoomRef.current * (delta > 0 ? 1.08 : 0.92));
+      applyZoom();
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: true });
 
     const render = () => {
       world.rotation.y = spin;
@@ -597,14 +653,17 @@ export function CubeStage({
     currentReference = buildReference({ parent: world, cubeSize, reference });
 
     const maxHeightUnits = Math.max(dims.heightCm, reference.heightCm) * cubeSize;
-    camera.position.set(90, Math.max(72, maxHeightUnits * 0.78), 162);
-    camera.lookAt(new THREE.Vector3(0, maxHeightUnits * 0.32, 0));
+    baseTarget.set(0, maxHeightUnits * 0.32, 0);
+    basePos.set(90, Math.max(72, maxHeightUnits * 0.78), 162);
+    zoomRef.current = clampZoom(zoomRef.current);
+    applyZoom();
     render();
 
     return () => {
       if (animationFrameRef.current) window.cancelAnimationFrame(animationFrameRef.current);
       window.removeEventListener("resize", setSize);
       resizeObserver?.disconnect();
+      canvas.removeEventListener("wheel", onWheel);
       if (supportsPointer) {
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointermove", onPointerMove);
@@ -639,8 +698,13 @@ export function CubeStage({
       scene.environment?.dispose?.();
       pmrem.dispose();
       renderer.dispose();
+      zoomApiRef.current = null;
     };
   }, [dims, reference, sceneScale, value]);
+
+  const zoomIn = () => zoomApiRef.current?.nudge(0.9);
+  const zoomOut = () => zoomApiRef.current?.nudge(1.12);
+  const resetZoom = () => zoomApiRef.current?.reset();
 
   return (
     <div className="relative h-full w-full">
@@ -658,6 +722,33 @@ export function CubeStage({
         <div className="h-full rounded-3xl bg-white/40 p-2 shadow-xl shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md">
           <ReferenceSvg reference={reference} />
         </div>
+      </div>
+
+      <div className="pointer-events-auto absolute bottom-3 left-3 flex gap-2">
+        <button
+          type="button"
+          onClick={zoomOut}
+          className="grid h-12 w-12 place-items-center rounded-2xl bg-white/55 shadow-lg shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md active:scale-[0.98]"
+          aria-label="缩小"
+        >
+          <span className="text-2xl font-bold text-rose-600">−</span>
+        </button>
+        <button
+          type="button"
+          onClick={zoomIn}
+          className="grid h-12 w-12 place-items-center rounded-2xl bg-white/55 shadow-lg shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md active:scale-[0.98]"
+          aria-label="放大"
+        >
+          <span className="text-2xl font-bold text-rose-600">＋</span>
+        </button>
+        <button
+          type="button"
+          onClick={resetZoom}
+          className="grid h-12 w-12 place-items-center rounded-2xl bg-white/55 shadow-lg shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md active:scale-[0.98]"
+          aria-label="重置缩放"
+        >
+          <span className="text-sm font-semibold text-rose-600">1×</span>
+        </button>
       </div>
     </div>
   );
