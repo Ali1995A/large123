@@ -1,6 +1,8 @@
 "use client";
 
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
 import { chooseUnitForValue, estimateBlockDimensionsCm } from "@/lib/blockLayout";
@@ -84,14 +86,15 @@ function buildInstancedUnitBlock({
   const count = Math.max(1, Number(unit.unitCount));
 
   const unitSide = unit.unitSideCm * cubeSize;
-  const geometry = new THREE.BoxGeometry(unitSide, unitSide, unitSide);
+  const bevel = Math.max(unitSide * 0.09, cubeSize * 0.12);
+  const geometry = new RoundedBoxGeometry(unitSide, unitSide, unitSide, 4, bevel);
 
   const fill = new THREE.MeshPhysicalMaterial({
     color: 0xff5aa5,
-    roughness: 0.28,
+    roughness: 0.25,
     metalness: 0.02,
     clearcoat: 0.65,
-    clearcoatRoughness: 0.26,
+    clearcoatRoughness: 0.22,
   });
   fill.polygonOffset = true;
   fill.polygonOffsetFactor = 1;
@@ -104,13 +107,6 @@ function buildInstancedUnitBlock({
     opacity: 0.9,
   });
 
-  const wire = new THREE.MeshBasicMaterial({
-    color: 0xffd1e6,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.22,
-  });
-
   const mesh = new THREE.InstancedMesh(geometry.clone(), fill, count);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
@@ -119,11 +115,6 @@ function buildInstancedUnitBlock({
   outlineMesh.castShadow = false;
   outlineMesh.receiveShadow = false;
   outlineMesh.renderOrder = 1;
-
-  const wireMesh = new THREE.InstancedMesh(geometry.clone(), wire, count);
-  wireMesh.castShadow = false;
-  wireMesh.receiveShadow = false;
-  wireMesh.renderOrder = 2;
 
   const { gridX, gridZ } = computeGrid(count);
   const halfX = (gridX * unitSide) / 2;
@@ -149,7 +140,6 @@ function buildInstancedUnitBlock({
     );
     matrix.compose(position, quaternion, scale);
     mesh.setMatrixAt(i, matrix);
-    wireMesh.setMatrixAt(i, matrix);
 
     matrix.compose(position, quaternion, outlineScale);
     outlineMesh.setMatrixAt(i, matrix);
@@ -157,14 +147,12 @@ function buildInstancedUnitBlock({
 
   mesh.instanceMatrix.needsUpdate = true;
   outlineMesh.instanceMatrix.needsUpdate = true;
-  wireMesh.instanceMatrix.needsUpdate = true;
 
   group.add(mesh);
   group.add(outlineMesh);
-  group.add(wireMesh);
 
   let labelMesh: THREE.InstancedMesh | null = null;
-  if (unit.unitValue >= 1000n) {
+  if (unit.unitValue >= 1000n && count <= 40) {
     const texture = createLabelTexture(formatLabel(unit.unitValue));
     if (texture) {
       const labelGeo = new THREE.PlaneGeometry(unitSide * 0.92, unitSide * 0.92);
@@ -214,7 +202,8 @@ function buildAggregateBlock({
   const height = dimensionsCm.heightCm * cubeSize;
   const group = new THREE.Group();
 
-  const geometry = new THREE.BoxGeometry(width, 1, depth);
+  const bevel = Math.max(Math.min(width, height, depth) * 0.03, cubeSize * 0.12);
+  const geometry = new RoundedBoxGeometry(width, height, depth, 3, bevel);
   const material = new THREE.MeshPhysicalMaterial({
     color: 0xff5aa5,
     roughness: 0.3,
@@ -223,7 +212,6 @@ function buildAggregateBlock({
     clearcoatRoughness: 0.3,
   });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.scale.y = height;
   mesh.position.y = height / 2;
   mesh.castShadow = true;
   mesh.receiveShadow = false;
@@ -238,22 +226,14 @@ function buildAggregateBlock({
       opacity: 0.9,
     }),
   );
-  outline.scale.set(1.02, height, 1.02);
+  outline.scale.set(1.02, 1.02, 1.02);
   outline.position.y = height / 2;
   outline.renderOrder = 1;
   outline.castShadow = false;
   outline.receiveShadow = false;
   group.add(outline);
 
-  const edges = new THREE.EdgesGeometry(geometry);
-  const edgeLines = new THREE.LineSegments(
-    edges,
-    new THREE.LineBasicMaterial({ color: 0xff9cc9, transparent: true, opacity: 0.75 }),
-  );
-  edgeLines.scale.y = height;
-  edgeLines.position.y = height / 2;
-  edgeLines.renderOrder = 2;
-  group.add(edgeLines);
+  // Use only the crisp outline; avoid extra line noise on big blocks.
 
   parent.add(group);
   return group;
@@ -479,9 +459,11 @@ export function CubeStage({
     renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 2000);
-    camera.position.set(100, 90, 170);
+    camera.position.set(98, 92, 168);
 
     const world = new THREE.Group();
     scene.add(world);
@@ -498,6 +480,7 @@ export function CubeStage({
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 10;
     key.shadow.camera.far = 600;
+    key.shadow.radius = 4;
     scene.add(key);
 
     scene.fog = new THREE.Fog(0xfff1f2, 220, 720);
@@ -605,7 +588,7 @@ export function CubeStage({
 
     const render = () => {
       world.rotation.y = spin;
-      spin *= 0.985;
+      spin *= 0.982;
       renderer.render(scene, camera);
       animationFrameRef.current = window.requestAnimationFrame(render);
     };
@@ -623,8 +606,8 @@ export function CubeStage({
     currentReference = buildReference({ parent: world, cubeSize, reference });
 
     const maxHeightUnits = Math.max(dims.heightCm, reference.heightCm) * cubeSize;
-    camera.position.set(95, Math.max(70, maxHeightUnits * 0.75), 170);
-    camera.lookAt(new THREE.Vector3(0, maxHeightUnits * 0.35, 0));
+    camera.position.set(90, Math.max(72, maxHeightUnits * 0.78), 162);
+    camera.lookAt(new THREE.Vector3(0, maxHeightUnits * 0.32, 0));
     render();
 
     return () => {
@@ -662,6 +645,8 @@ export function CubeStage({
           }
         });
       }
+      scene.environment?.dispose?.();
+      pmrem.dispose();
       renderer.dispose();
     };
   }, [dims, reference, sceneScale, value]);
@@ -676,10 +661,10 @@ export function CubeStage({
 
       <div
         className="pointer-events-none absolute bottom-3 right-3 flex items-end"
-        style={{ height: `${Math.round(referenceRatio * 86)}%` }}
+        style={{ height: `${Math.round(referenceRatio * 84)}%` }}
         aria-hidden="true"
       >
-        <div className="h-full rounded-3xl bg-white/45 p-2 shadow-lg shadow-rose-200/50 ring-1 ring-rose-200/80 backdrop-blur-sm">
+        <div className="h-full rounded-3xl bg-white/40 p-2 shadow-xl shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md">
           <ReferenceSvg reference={reference} />
         </div>
       </div>
