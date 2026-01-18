@@ -33,8 +33,10 @@ function Icon({
 export function AppShell() {
   const [index, setIndex] = useState(0);
   const step = NUMBER_STEPS[index]!;
-  const sizeCm = useMemo(() => estimateBlockDimensionsCm(step.value).maxCm, [step.value]);
-  const reference = useMemo(() => chooseReference(sizeCm), [sizeCm]);
+  const dims = useMemo(() => estimateBlockDimensionsCm(step.value), [step.value]);
+  // Use vertical height for reference selection so “flat plates” don’t jump to a mountain
+  // just because they are wide; this keeps transitions intuitive for kids.
+  const reference = useMemo(() => chooseReference(dims.heightCm), [dims.heightCm]);
 
   const { hasUserGesture, unlock, speak } = useChineseSpeech();
 

@@ -1153,15 +1153,21 @@ export function CubeStage({
         clearcoat: 0.55,
         clearcoatRoughness: 0.25,
       });
+
+      const unitGroup = new THREE.Group();
+      unitGroup.position.set(
+        -(blockHalfWidth + collapsedSide / 2 + 18 * cubeSize),
+        0,
+        0,
+      );
+      world.add(unitGroup);
+      currentUnitCube = unitGroup;
+
       const cube = new THREE.Mesh(geo, fill);
       cube.castShadow = true;
       cube.receiveShadow = false;
-      cube.position.set(
-        -(blockHalfWidth + collapsedSide / 2 + 18 * cubeSize),
-        collapsedSide / 2,
-        0,
-      );
-      world.add(cube);
+      cube.position.set(0, collapsedSide / 2, 0);
+      unitGroup.add(cube);
 
       const outline = new THREE.Mesh(
         geo.clone(),
@@ -1175,7 +1181,7 @@ export function CubeStage({
       outline.position.copy(cube.position);
       outline.scale.set(1.055, 1.055, 1.055);
       outline.renderOrder = 1;
-      world.add(outline);
+      unitGroup.add(outline);
 
       const tex = getFaceGridTexture10();
       if (tex) {
@@ -1191,7 +1197,7 @@ export function CubeStage({
         const grid = new THREE.Mesh(geo.clone(), gridMat);
         grid.position.copy(cube.position);
         grid.renderOrder = 2;
-        world.add(grid);
+        unitGroup.add(grid);
 
         const labelTex = createLabelTexture(formatLabel(value));
         if (labelTex) {
@@ -1203,19 +1209,10 @@ export function CubeStage({
             depthWrite: false,
           });
           const label = new THREE.Mesh(labelGeo, labelMat);
-          label.position.set(cube.position.x, cube.position.y, cube.position.z + collapsedSide / 2 + cubeSize * 0.03);
+          label.position.set(0, cube.position.y, cube.position.z + collapsedSide / 2 + cubeSize * 0.03);
           label.renderOrder = 3;
-          world.add(label);
-
-          currentUnitCube = new THREE.Group();
-          currentUnitCube.add(cube, outline, grid, label);
-        } else {
-          currentUnitCube = new THREE.Group();
-          currentUnitCube.add(cube, outline, grid);
+          unitGroup.add(label);
         }
-      } else {
-        currentUnitCube = new THREE.Group();
-        currentUnitCube.add(cube, outline);
       }
     }
 
