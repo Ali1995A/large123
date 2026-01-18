@@ -526,7 +526,8 @@ export function CubeStage({
     }
     window.addEventListener("resize", setSize, { passive: true });
 
-    let spin = 0;
+    let rotationY = 0;
+    let spinVelocity = 0;
     let lastX = 0;
     const activePointers = new Map<number, { x: number; y: number }>();
     let pinchStartDist = 0;
@@ -573,7 +574,9 @@ export function CubeStage({
       if (activePointers.size === 1) {
         const delta = e.clientX - lastX;
         lastX = e.clientX;
-        spin += delta * 0.008;
+        const step = delta * 0.008;
+        rotationY += step;
+        spinVelocity = step;
         return;
       }
 
@@ -608,7 +611,9 @@ export function CubeStage({
       if (!e.touches[0]) return;
       const delta = e.touches[0].clientX - lastX;
       lastX = e.touches[0].clientX;
-      spin += delta * 0.008;
+      const step = delta * 0.008;
+      rotationY += step;
+      spinVelocity = step;
       e.preventDefault();
     };
     const onTouchEnd = () => {};
@@ -634,8 +639,10 @@ export function CubeStage({
     canvas.addEventListener("wheel", onWheel, { passive: true });
 
     const render = () => {
-      world.rotation.y = spin;
-      spin *= 0.982;
+      rotationY += spinVelocity;
+      spinVelocity *= 0.92;
+      if (Math.abs(spinVelocity) < 0.00002) spinVelocity = 0;
+      world.rotation.y = rotationY;
       renderer.render(scene, camera);
       animationFrameRef.current = window.requestAnimationFrame(render);
     };
