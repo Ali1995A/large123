@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
 import { chooseUnitForValue, estimateBlockDimensionsCm } from "@/lib/blockLayout";
+import { ReferenceSvg } from "@/components/ReferenceSvg";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -448,6 +449,11 @@ export function CubeStage({
   const animationFrameRef = useRef<number | null>(null);
 
   const dims = useMemo(() => estimateBlockDimensionsCm(value), [value]);
+  const referenceRatio = useMemo(() => {
+    const denom = Math.max(dims.maxCm, reference.heightCm);
+    return clamp(reference.heightCm / denom, 0.06, 1);
+  }, [dims.maxCm, reference.heightCm]);
+
   const targetMaxHeightUnits = 120;
   const sceneScale = useMemo(() => {
     const rawMax = Math.max(dims.maxCm, reference.heightCm);
@@ -661,10 +667,22 @@ export function CubeStage({
   }, [dims, reference, sceneScale, value]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="h-full w-full touch-none"
-      aria-label="3D 体块对比"
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        className="h-full w-full touch-none"
+        aria-label="3D 体块对比"
+      />
+
+      <div
+        className="pointer-events-none absolute bottom-3 right-3 flex items-end"
+        style={{ height: `${Math.round(referenceRatio * 86)}%` }}
+        aria-hidden="true"
+      >
+        <div className="h-full rounded-3xl bg-white/45 p-2 shadow-lg shadow-rose-200/50 ring-1 ring-rose-200/80 backdrop-blur-sm">
+          <ReferenceSvg reference={reference} />
+        </div>
+      </div>
+    </div>
   );
 }
