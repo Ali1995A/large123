@@ -351,7 +351,7 @@ function buildReference({
   const group = new THREE.Group();
 
   const outlineColor = 0xdb2e7b;
-  const outlineOpacity = 0.55;
+  const outlineOpacity = 0.42;
   const makeOutlineMaterial = () =>
     new THREE.MeshBasicMaterial({
       color: outlineColor,
@@ -859,11 +859,11 @@ export function CubeStage({
     const renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
-      alpha: true,
+      alpha: false,
       powerPreference: "high-performance",
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.setClearColor(0xfff6fb, 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -895,7 +895,7 @@ export function CubeStage({
     key.shadow.radius = 4;
     scene.add(key);
 
-    scene.fog = new THREE.Fog(0xfff1f2, 220, 720);
+    scene.fog = new THREE.Fog(0xfff1f2, 320, 1200);
 
     const floorGeo = new THREE.PlaneGeometry(1200, 1200);
     const floorMat = new THREE.MeshStandardMaterial({
