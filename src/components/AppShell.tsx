@@ -67,7 +67,7 @@ export function AppShell() {
   }, [speak, unlock]);
 
   return (
-    <div className="min-h-[var(--app-height,100dvh)] w-full bg-gradient-to-b from-rose-50 via-pink-50 to-rose-100 text-rose-950">
+    <div className="min-h-[var(--app-height,100dvh)] w-full bg-gradient-to-b from-rose-50 via-violet-50/40 to-rose-100 text-rose-950">
       <div className="mx-auto flex min-h-[var(--app-height,100dvh)] w-full flex-col px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),16px)]">
         <header className="flex items-center justify-between">
           <button
