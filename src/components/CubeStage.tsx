@@ -6,7 +6,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
 import { chooseUnitForValue, computeGridForCount, estimateBlockDimensionsCm } from "@/lib/blockLayout";
-import { ReferenceSvg } from "@/components/ReferenceSvg";
+import { ReferenceArtView } from "@/components/ReferenceArtView";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -720,7 +720,7 @@ export function CubeStage({
         aria-hidden="true"
       >
         <div className="h-full rounded-3xl bg-white/40 p-2 shadow-xl shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md">
-          <ReferenceSvg reference={reference} />
+          <ReferenceArtView reference={reference} />
         </div>
       </div>
 
