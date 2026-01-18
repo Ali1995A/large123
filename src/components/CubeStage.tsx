@@ -52,6 +52,43 @@ function getFaceGridTexture10() {
   return tex;
 }
 
+let facadeLinesTexture: THREE.CanvasTexture | null = null;
+function getFacadeLinesTexture() {
+  if (typeof window === "undefined") return null;
+  if (facadeLinesTexture) return facadeLinesTexture;
+
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.strokeStyle = "rgba(91,24,52,0.55)";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+
+  // One “floor separator” line per tile; repeat it in the material.
+  const y = Math.round(size * 0.9);
+  ctx.beginPath();
+  ctx.moveTo(18, y);
+  ctx.lineTo(size - 18, y);
+  ctx.stroke();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+
+  facadeLinesTexture = tex;
+  return tex;
+}
+
 function formatLabel(value: bigint) {
   const s = value.toString();
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -371,6 +408,42 @@ function buildReference({
     group.add(outline);
   };
 
+  const addFloorLines = ({
+    target,
+    worldHeight,
+    floorHeightCm = 3,
+    opacity = 0.5,
+  }: {
+    target: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    worldHeight: number;
+    floorHeightCm?: number;
+    opacity?: number;
+  }) => {
+    const tex = getFacadeLinesTexture();
+    if (!tex) return;
+
+    const floors = clamp(Math.round(worldHeight / (floorHeightCm * cubeSize)), 6, 240);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+    tex.repeat.set(1, floors);
+
+    const overlay = new THREE.Mesh(target.geometry.clone(), mat);
+    overlay.position.copy(target.position);
+    overlay.quaternion.copy(target.quaternion);
+    overlay.scale.copy(target.scale).multiplyScalar(1.004);
+    overlay.renderOrder = 3.2;
+    overlay.castShadow = false;
+    overlay.receiveShadow = false;
+    group.add(overlay);
+  };
+
   const clampWorld = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
   const sizeFromHeight = (ratio: number, minCubes: number, maxHeightRatio: number) => {
     const min = minCubes * cubeSize;
@@ -665,6 +738,7 @@ function buildReference({
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, towerH, d), pink);
     body.position.y = podium.position.y + podiumH / 2 + towerH / 2;
     add(body);
+    addFloorLines({ target: body, worldHeight: towerH, opacity: 0.5 });
 
     const capH = Math.max(towerH * 0.04, 1.2 * cubeSize);
     const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, capH, d * 1.02), white);
@@ -683,6 +757,7 @@ function buildReference({
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(w, shaftH, d), pink);
     shaft.position.y = base.position.y + baseH / 2 + shaftH / 2;
     add(shaft);
+    addFloorLines({ target: shaft, worldHeight: shaftH, opacity: 0.48 });
 
     const crownH = Math.max(height * 0.1, 2.2 * cubeSize);
     const crown = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, crownH, d * 1.05), white);
