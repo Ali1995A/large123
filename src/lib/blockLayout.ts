@@ -20,46 +20,25 @@ function pow10(exp: number): bigint {
   return out;
 }
 
-function pow10Number(exp: number): number {
-  return 10 ** exp;
-}
-
-function unitDimsFromUnitExponent(unitExp: number) {
-  if (unitExp <= 0) return { xExp: 0, yExp: 0, zExp: 0 };
-  if (unitExp === 2) return { xExp: 1, yExp: 0, zExp: 1 }; // 100 = 10×10×1
-  if (unitExp === 4) return { xExp: 2, yExp: 0, zExp: 2 }; // 10,000 = 100×100×1
-  if (unitExp === 6) return { xExp: 2, yExp: 2, zExp: 2 }; // 1,000,000 = 100×100×100
-
-  const base = Math.floor(unitExp / 3);
-  const remainder = unitExp % 3;
-  const exps = [base, base, base] as number[];
-  for (let i = 0; i < remainder; i++) exps[i] += 1;
-  exps.sort((a, b) => b - a);
-  return { xExp: exps[0]!, yExp: exps[2]!, zExp: exps[1]! };
-}
-
 export function chooseUnitForValue(value: bigint): UnitDimensionsCm {
-  if (value < 10_000n) {
+  if (value <= 0n) {
     return { unitValue: 1n, unitWidthCm: 1, unitHeightCm: 1, unitDepthCm: 1 };
   }
 
-  const k = Math.max(0, value.toString().length - 1);
-  let unitExp = 2 * (Math.floor((k - 4) / 3) + 1);
-  if (unitExp < 2) unitExp = 2;
-
+  // Prefer "cubic" units: 1, 1000, 1,000,000, ... so that:
+  // 10,000 = 10 × (1000-cube), 100,000 = 100 × (1000-cube), etc.
+  const digitsMinus1 = Math.max(0, value.toString().length - 1);
+  let unitExp = value < 10_000n ? 0 : Math.floor(digitsMinus1 / 3) * 3;
   let unitValue = pow10(unitExp);
+
   while (value / unitValue > MAX_UNIT_INSTANCES) {
-    unitValue *= 100n;
-    unitExp += 2;
+    unitExp += 3;
+    unitValue *= 1000n;
   }
 
-  const { xExp, yExp, zExp } = unitDimsFromUnitExponent(unitExp);
-  return {
-    unitValue,
-    unitWidthCm: pow10Number(xExp),
-    unitHeightCm: pow10Number(yExp),
-    unitDepthCm: pow10Number(zExp),
-  };
+  const sideExp = Math.floor(unitExp / 3);
+  const sideCm = 10 ** sideExp;
+  return { unitValue, unitWidthCm: sideCm, unitHeightCm: sideCm, unitDepthCm: sideCm };
 }
 
 export function estimateBlockDimensionsCm(value: bigint): BlockDimensionsCm {
@@ -78,4 +57,3 @@ export function estimateBlockDimensionsCm(value: bigint): BlockDimensionsCm {
 
   return { widthCm, heightCm, depthCm, maxCm };
 }
-
