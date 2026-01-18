@@ -68,7 +68,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-[var(--app-height,100dvh)] w-full bg-gradient-to-b from-rose-50 via-pink-50 to-rose-100 text-rose-950">
-      <div className="mx-auto flex min-h-[var(--app-height,100dvh)] w-full max-w-[980px] flex-col px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),16px)]">
+      <div className="mx-auto flex min-h-[var(--app-height,100dvh)] w-full flex-col px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),16px)]">
         <header className="flex items-center justify-between">
           <button
             type="button"
@@ -95,7 +95,7 @@ export function AppShell() {
         </header>
 
         <main className="mt-4 flex flex-1 flex-col gap-4">
-          <div className="relative flex flex-1 overflow-hidden rounded-[32px] bg-white/50 shadow-sm ring-1 ring-rose-200">
+          <div className="relative flex flex-1 overflow-hidden rounded-[32px] bg-white/55 shadow-sm ring-1 ring-rose-200">
             <CubeStage value={step.value} reference={reference} />
 
             {!hasUserGesture && (
