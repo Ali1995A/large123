@@ -483,21 +483,33 @@ function buildReference({
     add(door);
   } else if (kind === "tree") {
     const trunkH = height * 0.55;
-    const trunkR = widthFromHeight(0.06, 0.9, 8);
+    const trunkR = widthFromHeight(0.095, 1.4, 14);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.82, trunkR, trunkH, 18), darker);
     trunk.position.y = trunkH / 2 + 0.5 * cubeSize;
     add(trunk);
     const crownH = height * 0.65;
-    const crownR = widthFromHeight(0.22, 4.2, 30);
+    const crownR = widthFromHeight(0.33, 6.5, 46);
     const crown = new THREE.Mesh(new THREE.ConeGeometry(crownR, crownH, 20), pink);
     crown.position.y = trunk.position.y + trunkH / 2 + crownH / 2;
     add(crown);
   } else if (kind === "building") {
-    const w = widthFromHeight(0.18, 10, 32);
-    const d = depthFromHeight(0.12, 8, 24);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), pink);
-    body.position.y = height / 2 + 0.5 * cubeSize;
+    const w = widthFromHeight(0.26, 14, 54);
+    const d = depthFromHeight(0.18, 10, 40);
+
+    const podiumH = Math.max(height * 0.08, 1.8 * cubeSize);
+    const podium = new THREE.Mesh(new THREE.BoxGeometry(w * 1.08, podiumH, d * 1.08), darker);
+    podium.position.y = podiumH / 2 + 0.5 * cubeSize;
+    add(podium);
+
+    const towerH = height - podiumH;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, towerH, d), pink);
+    body.position.y = podium.position.y + podiumH / 2 + towerH / 2;
     add(body);
+
+    const capH = Math.max(towerH * 0.04, 1.2 * cubeSize);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, capH, d * 1.02), white);
+    cap.position.y = body.position.y + towerH / 2 + capH / 2;
+    add(cap);
   } else if (kind === "mountain") {
     const r = widthFromHeight(0.24, 10, 36);
     const cone = new THREE.Mesh(new THREE.ConeGeometry(r, height, 28), pink);
