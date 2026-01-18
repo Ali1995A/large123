@@ -411,7 +411,8 @@ function buildReference({
   const addFloorLines = ({
     target,
     worldHeight,
-    floorHeightCm = 3,
+    // Typical floor-to-floor height for buildings.
+    floorHeightCm = 450,
     opacity = 0.5,
   }: {
     target: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
