@@ -586,20 +586,32 @@ export function CubeStage({
     }
     window.addEventListener("resize", setSize, { passive: true });
 
-    let rotationY = 0;
-    let spinVelocity = 0;
+    let theta = 0.85;
+    let phi = 1.05;
+    let baseRadius = 180;
+    const minPhi = 0.35;
+    const maxPhi = 1.35;
+
     let lastX = 0;
+    let lastY = 0;
     const activePointers = new Map<number, { x: number; y: number }>();
     let pinchStartDist = 0;
     let pinchStartZoom = 1;
+    let pinchStartMid: { x: number; y: number } | null = null;
     const baseTarget = new THREE.Vector3(0, 0, 0);
-    const basePos = new THREE.Vector3(90, 90, 162);
 
     const clampZoom = (z: number) => clamp(z, 0.55, 3.2);
     const applyZoom = () => {
-      const zoom = zoomRef.current;
-      const dir = basePos.clone().sub(baseTarget);
-      camera.position.copy(baseTarget.clone().add(dir.multiplyScalar(zoom)));
+      const zoom = clampZoom(zoomRef.current);
+      zoomRef.current = zoom;
+
+      const radius = baseRadius * zoom;
+      const sinPhi = Math.sin(phi);
+      const x = radius * sinPhi * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      const z = radius * sinPhi * Math.cos(theta);
+
+      camera.position.set(baseTarget.x + x, baseTarget.y + y, baseTarget.z + z);
       camera.lookAt(baseTarget);
     };
     zoomApiRef.current = {
@@ -618,10 +630,12 @@ export function CubeStage({
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (activePointers.size === 1) {
         lastX = e.clientX;
+        lastY = e.clientY;
       } else if (activePointers.size === 2) {
         const pts = Array.from(activePointers.values());
         pinchStartDist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
         pinchStartZoom = zoomRef.current;
+        pinchStartMid = { x: (pts[0]!.x + pts[1]!.x) / 2, y: (pts[0]!.y + pts[1]!.y) / 2 };
       }
       try {
         canvas.setPointerCapture(e.pointerId);
@@ -633,10 +647,13 @@ export function CubeStage({
 
       if (activePointers.size === 1) {
         const delta = e.clientX - lastX;
+        const deltaY = e.clientY - lastY;
         lastX = e.clientX;
-        const step = delta * 0.008;
-        rotationY += step;
-        spinVelocity = step;
+        lastY = e.clientY;
+
+        theta -= delta * 0.006;
+        phi = clamp(phi + deltaY * 0.006, minPhi, maxPhi);
+        applyZoom();
         return;
       }
 
@@ -646,8 +663,24 @@ export function CubeStage({
         if (pinchStartDist > 0) {
           const scale = dist / pinchStartDist;
           zoomRef.current = clampZoom(pinchStartZoom / scale);
-          applyZoom();
         }
+
+        const mid = { x: (pts[0]!.x + pts[1]!.x) / 2, y: (pts[0]!.y + pts[1]!.y) / 2 };
+        if (pinchStartMid) {
+          const dx = mid.x - pinchStartMid.x;
+          const dy = mid.y - pinchStartMid.y;
+          pinchStartMid = mid;
+
+          const right = new THREE.Vector3();
+          camera.getWorldDirection(right);
+          right.cross(camera.up).normalize();
+          const up = camera.up.clone().normalize();
+
+          const panScale = (baseRadius * zoomRef.current) / 900;
+          baseTarget.addScaledVector(right, -dx * panScale);
+          baseTarget.addScaledVector(up, dy * panScale);
+        }
+        applyZoom();
       }
     };
     const onPointerUp = (e: PointerEvent) => {
@@ -655,8 +688,10 @@ export function CubeStage({
       if (activePointers.size === 1) {
         const only = Array.from(activePointers.values())[0]!;
         lastX = only.x;
+        lastY = only.y;
       } else if (activePointers.size === 0) {
         pinchStartDist = 0;
+        pinchStartMid = null;
       }
       try {
         canvas.releasePointerCapture(e.pointerId);
@@ -666,14 +701,17 @@ export function CubeStage({
     const onTouchStart = (e: TouchEvent) => {
       if (!e.touches[0]) return;
       lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!e.touches[0]) return;
       const delta = e.touches[0].clientX - lastX;
+      const deltaY = e.touches[0].clientY - lastY;
       lastX = e.touches[0].clientX;
-      const step = delta * 0.008;
-      rotationY += step;
-      spinVelocity = step;
+      lastY = e.touches[0].clientY;
+      theta -= delta * 0.006;
+      phi = clamp(phi + deltaY * 0.006, minPhi, maxPhi);
+      applyZoom();
       e.preventDefault();
     };
     const onTouchEnd = () => {};
@@ -699,10 +737,6 @@ export function CubeStage({
     canvas.addEventListener("wheel", onWheel, { passive: true });
 
     const render = () => {
-      rotationY += spinVelocity;
-      spinVelocity *= 0.92;
-      if (Math.abs(spinVelocity) < 0.00002) spinVelocity = 0;
-      world.rotation.y = rotationY;
       renderer.render(scene, camera);
       animationFrameRef.current = window.requestAnimationFrame(render);
     };
@@ -722,10 +756,23 @@ export function CubeStage({
     rim.position.x = offsetX;
     currentReference = buildReference({ parent: world, cubeSize, reference, offsetX });
 
-    const maxHeightUnits = Math.max(dims.heightCm, reference.heightCm) * cubeSize;
-    baseTarget.set(0, maxHeightUnits * 0.32, 0);
-    basePos.set(90, Math.max(72, maxHeightUnits * 0.78), 162);
-    zoomRef.current = clampZoom(zoomRef.current);
+    // Auto-frame to reduce empty space (especially on iPad).
+    const bounds = new THREE.Box3();
+    const c = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    if (currentBlock) bounds.expandByObject(currentBlock);
+    if (currentReference) bounds.expandByObject(currentReference);
+    bounds.getCenter(c);
+    bounds.getSize(size);
+
+    baseTarget.copy(c);
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    const fov = THREE.MathUtils.degToRad(camera.fov);
+    baseRadius = (maxDim * 0.62) / Math.tan(fov / 2);
+    baseRadius = clamp(baseRadius, 70, 520);
+
+    phi = clamp(1.05, minPhi, maxPhi);
+    theta = 0.85;
     applyZoom();
     render();
 
