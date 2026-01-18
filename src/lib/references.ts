@@ -36,7 +36,7 @@ const REFERENCES: ReferenceObject[] = [
   { id: "building", name: "大楼（60米）", heightCm: 6000, kind: "building" },
   { id: "tower", name: "摩天楼（150米）", heightCm: 15000, kind: "tower" },
   { id: "megaTower", name: "超高楼（600米）", heightCm: 60000, kind: "tower" },
-  { id: "kiloTower", name: "1公里高楼", heightCm: 120000, kind: "tower" },
+  { id: "mountain1k", name: "千米高山", heightCm: 100000, kind: "mountain" },
   { id: "mountain", name: "高山（珠穆朗玛）", heightCm: 884800, kind: "mountain" },
   { id: "earth", name: "地球直径", heightCm: 1274200000, kind: "earth" },
   { id: "moonDistance", name: "地月距离", heightCm: 38440000000, kind: "moonDistance" },
