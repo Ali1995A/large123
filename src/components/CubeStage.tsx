@@ -327,14 +327,41 @@ function buildReference({
     head.position.set(2.6 * cubeSize, body.position.y + 0.6 * cubeSize, 0);
     add(head);
   } else if (kind === "child") {
-    const torsoH = height * 0.62;
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.4 * cubeSize, torsoH / 2, 8, 16), pink);
-    torso.position.y = torsoH / 2 + 0.5 * cubeSize;
+    const legH = height * 0.46;
+    const torsoH = height * 0.34;
+    const headD = height - legH - torsoH;
+
+    const hipY = 0.5 * cubeSize + legH;
+
+    const legGeo = new THREE.CapsuleGeometry(0.75 * cubeSize, legH / 2, 8, 16);
+    const leftLeg = new THREE.Mesh(legGeo, pink);
+    leftLeg.position.set(-1.05 * cubeSize, 0.5 * cubeSize + legH / 2, 0);
+    add(leftLeg);
+    const rightLeg = leftLeg.clone();
+    rightLeg.position.x = 1.05 * cubeSize;
+    add(rightLeg);
+
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(1.55 * cubeSize, torsoH / 2, 10, 18),
+      pink,
+    );
+    torso.position.y = hipY + torsoH / 2;
     add(torso);
-    const headR = 1.25 * cubeSize;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 20, 16), darker);
-    head.position.y = torso.position.y + torsoH / 2 + headR * 1.2;
+
+    const headR = Math.max(1.35 * cubeSize, headD * 0.42);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 22, 18), darker);
+    head.position.y = torso.position.y + torsoH / 2 + headR * 1.05;
     add(head);
+
+    const armGeo = new THREE.CapsuleGeometry(0.6 * cubeSize, torsoH * 0.44, 8, 14);
+    const leftArm = new THREE.Mesh(armGeo, darker);
+    leftArm.position.set(-(1.55 * cubeSize + 0.55 * cubeSize), torso.position.y + torsoH * 0.05, 0);
+    leftArm.rotation.z = 0.28;
+    add(leftArm);
+    const rightArm = leftArm.clone();
+    rightArm.position.x *= -1;
+    rightArm.rotation.z *= -1;
+    add(rightArm);
   } else if (kind === "door") {
     const w = 6 * cubeSize;
     const d = 1.2 * cubeSize;
@@ -363,16 +390,28 @@ function buildReference({
     win.position.y = body.position.y + h * 0.15;
     add(win);
   } else if (kind === "house") {
-    const w = 10 * cubeSize;
-    const d = 8 * cubeSize;
-    const h = height * 0.65;
-    const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), pink);
-    base.position.y = h / 2 + 0.5 * cubeSize;
+    const wallH = height * 0.64;
+    const roofH = height - wallH;
+
+    const w = Math.max(10 * cubeSize, height * 0.42);
+    const d = Math.max(8 * cubeSize, w * 0.78);
+
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, d), pink);
+    base.position.y = wallH / 2 + 0.5 * cubeSize;
     add(base);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.65, height * 0.55, 4), darker);
-    roof.position.y = base.position.y + h / 2 + height * 0.275;
+
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.72, roofH, 4), darker);
+    roof.position.y = base.position.y + wallH / 2 + roofH / 2;
     roof.rotation.y = Math.PI / 4;
     add(roof);
+
+    const doorH = wallH * 0.52;
+    const door = new THREE.Mesh(
+      new THREE.BoxGeometry(w * 0.18, doorH, d * 0.06),
+      white,
+    );
+    door.position.set(0, 0.5 * cubeSize + doorH / 2, d / 2 + door.geometry.parameters.depth / 2);
+    add(door);
   } else if (kind === "tree") {
     const trunkH = height * 0.55;
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.9 * cubeSize, 1.1 * cubeSize, trunkH, 18), darker);

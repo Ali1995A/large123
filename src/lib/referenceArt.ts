@@ -62,10 +62,13 @@ export const REFERENCE_ART: ReferenceArt[] = [
     kind: "child",
     viewBox: "0 0 240 380",
     innerSvg: `
-      <circle cx="120" cy="90" r="52" fill="url(#p1)" class="stroke-strong" />
-      <path d="M70 170c0-18 14-32 32-32h36c18 0 32 14 32 32v116c0 24-20 44-44 44s-56-20-56-44V170Z" fill="url(#p2)" class="stroke-strong" />
-      <path d="M66 214c-26 12-26 48 0 60" fill="none" class="stroke-strong" opacity="0.55" />
-      <path d="M174 214c26 12 26 48 0 60" fill="none" class="stroke-strong" opacity="0.55" />
+      <circle cx="120" cy="86" r="50" fill="url(#p1)" class="stroke-strong" />
+      <path d="M82 150c0-18 14-32 32-32h12c18 0 32 14 32 32v92c0 30-24 54-50 54s-26-24-26-54v-92Z" fill="url(#p2)" class="stroke-strong" />
+      <path d="M98 234v92" fill="none" class="stroke-strong" />
+      <path d="M142 234v92" fill="none" class="stroke-strong" />
+      <path d="M78 180c-26 10-26 48 0 60" fill="none" class="stroke-strong" opacity="0.55" />
+      <path d="M162 180c26 10 26 48 0 60" fill="none" class="stroke-strong" opacity="0.55" />
+      <path d="M106 340c10 8 18 8 28 0" fill="none" class="stroke-mid" opacity="0.55" />
     `,
   },
   {
@@ -99,9 +102,11 @@ export const REFERENCE_ART: ReferenceArt[] = [
     kind: "house",
     viewBox: "0 0 260 320",
     innerSvg: `
-      <path d="M40 150 130 70 220 150" fill="url(#p2)" class="stroke-strong" />
-      <rect x="60" y="150" width="140" height="130" rx="14" fill="url(#p1)" class="stroke-strong" />
-      <rect x="118" y="205" width="28" height="75" rx="10" fill="#fff6fa" class="stroke-mid" />
+      <path d="M42 154 130 72 218 154" fill="url(#p2)" class="stroke-strong" />
+      <rect x="62" y="154" width="136" height="126" rx="16" fill="url(#p1)" class="stroke-strong" />
+      <rect x="116" y="206" width="28" height="74" rx="10" fill="#fff6fa" class="stroke-mid" />
+      <rect x="82" y="188" width="28" height="28" rx="8" fill="#fff6fa" class="stroke-mid" opacity="0.9" />
+      <rect x="150" y="188" width="28" height="28" rx="8" fill="#fff6fa" class="stroke-mid" opacity="0.9" />
     `,
   },
   {
@@ -150,4 +155,3 @@ export const REFERENCE_ART: ReferenceArt[] = [
 export function getReferenceArt(kind: ReferenceObject["kind"]) {
   return REFERENCE_ART.find((a) => a.kind === kind) ?? null;
 }
-
