@@ -944,7 +944,7 @@ export function CubeStage({
     <div className="relative h-full w-full">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 block h-full w-full touch-none"
+        className="block h-full w-full touch-none"
         aria-label="3D 体块对比"
       />
 
