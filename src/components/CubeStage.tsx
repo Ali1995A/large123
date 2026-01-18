@@ -6,10 +6,50 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { useEffect, useMemo, useRef } from "react";
 import type { ReferenceObject } from "@/lib/references";
 import { chooseUnitForValue, computeGridForCount, estimateBlockDimensionsCm } from "@/lib/blockLayout";
-import { ReferenceArtView } from "@/components/ReferenceArtView";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+let gridTexture10: THREE.CanvasTexture | null = null;
+function getFaceGridTexture10() {
+  if (typeof window === "undefined") return null;
+  if (gridTexture10) return gridTexture10;
+
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.strokeStyle = "rgba(219,46,123,0.55)";
+  ctx.lineWidth = 2;
+
+  const inset = 18;
+  const span = size - inset * 2;
+  for (let i = 1; i < 10; i++) {
+    const t = inset + (span * i) / 10;
+    ctx.beginPath();
+    ctx.moveTo(inset, t);
+    ctx.lineTo(size - inset, t);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(t, inset);
+    ctx.lineTo(t, size - inset);
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+
+  gridTexture10 = tex;
+  return tex;
 }
 
 function formatLabel(value: bigint) {
@@ -109,6 +149,27 @@ function buildInstancedUnitBlock({
   outlineMesh.renderOrder = 1;
   outlineMesh.frustumCulled = false;
 
+  let faceGridMesh: THREE.InstancedMesh | null = null;
+  if (unit.unitValue === 1000n && count <= 800) {
+    const tex = getFaceGridTexture10();
+    if (tex) {
+      const gridMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      });
+      faceGridMesh = new THREE.InstancedMesh(geometry.clone(), gridMat, count);
+      faceGridMesh.castShadow = false;
+      faceGridMesh.receiveShadow = false;
+      faceGridMesh.renderOrder = 2;
+      faceGridMesh.frustumCulled = false;
+    }
+  }
+
   const { gridX, gridZ } = computeGridForCount(count);
   const halfX = (gridX * unitSide) / 2;
   const halfZ = (gridZ * unitSide) / 2;
@@ -136,13 +197,20 @@ function buildInstancedUnitBlock({
 
     matrix.compose(position, quaternion, outlineScale);
     outlineMesh.setMatrixAt(i, matrix);
+
+    if (faceGridMesh) {
+      matrix.compose(position, quaternion, scale);
+      faceGridMesh.setMatrixAt(i, matrix);
+    }
   }
 
   mesh.instanceMatrix.needsUpdate = true;
   outlineMesh.instanceMatrix.needsUpdate = true;
+  if (faceGridMesh) faceGridMesh.instanceMatrix.needsUpdate = true;
 
   group.add(mesh);
   group.add(outlineMesh);
+  if (faceGridMesh) group.add(faceGridMesh);
 
   let labelMesh: THREE.InstancedMesh | null = null;
   if (unit.unitValue >= 1000n && count <= 40) {
@@ -468,11 +536,6 @@ export function CubeStage({
   } | null>(null);
 
   const dims = useMemo(() => estimateBlockDimensionsCm(value), [value]);
-  const referenceRatio = useMemo(() => {
-    const denom = Math.max(dims.maxCm, reference.heightCm);
-    return clamp(reference.heightCm / denom, 0.06, 1);
-  }, [dims.maxCm, reference.heightCm]);
-
   const targetMaxHeightUnits = 120;
   const sceneScale = useMemo(() => {
     const rawMax = Math.max(dims.maxCm, reference.heightCm);
@@ -537,7 +600,7 @@ export function CubeStage({
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material];
     for (const m of gridMats) {
       m.transparent = true;
-      m.opacity = 0.28;
+      m.opacity = 0.34;
       m.depthWrite = false;
     }
     grid.position.y = 0.02;
@@ -548,7 +611,7 @@ export function CubeStage({
     const microMats = Array.isArray(microGrid.material) ? microGrid.material : [microGrid.material];
     for (const m of microMats) {
       m.transparent = true;
-      m.opacity = 0.12;
+      m.opacity = 0.16;
       m.depthWrite = false;
     }
     microGrid.position.y = 0.025;
@@ -830,16 +893,6 @@ export function CubeStage({
         className="h-full w-full touch-none"
         aria-label="3D 体块对比"
       />
-
-      <div
-        className="pointer-events-none absolute bottom-3 right-3 flex items-end"
-        style={{ height: `${Math.round(referenceRatio * 84)}%` }}
-        aria-hidden="true"
-      >
-        <div className="h-full rounded-3xl bg-white/40 p-2 shadow-xl shadow-rose-200/40 ring-1 ring-rose-200/70 backdrop-blur-md">
-          <ReferenceArtView reference={reference} />
-        </div>
-      </div>
 
       <div className="pointer-events-auto absolute bottom-3 left-3 flex gap-2">
         <button
