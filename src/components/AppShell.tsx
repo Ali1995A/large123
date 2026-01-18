@@ -55,6 +55,14 @@ export function AppShell() {
     void speak(next.spoken);
   }, [index, speak, unlock]);
 
+  const goPrev = useCallback(() => {
+    unlock();
+    const prevIndex = (index - 1 + NUMBER_STEPS.length) % NUMBER_STEPS.length;
+    const prev = NUMBER_STEPS[prevIndex]!;
+    setIndex(prevIndex);
+    void speak(prev.spoken);
+  }, [index, speak, unlock]);
+
   const replay = useCallback(() => {
     unlock();
     void speak(step.spoken);
@@ -128,6 +136,16 @@ export function AppShell() {
               <div className="text-xs font-medium text-rose-500">参照物</div>
               <div className="text-base font-semibold">{reference.name}</div>
             </div>
+
+            <button
+              type="button"
+              onClick={goPrev}
+              className="inline-flex h-16 items-center justify-center gap-2 rounded-3xl bg-white/80 px-5 text-lg font-semibold text-rose-700 shadow-lg shadow-rose-200 active:scale-[0.99] ring-1 ring-rose-200"
+              aria-label="上一步"
+            >
+              <Icon path="M14 17l-5-5 5-5" className="h-7 w-7" />
+              <span className="tracking-tight">上一步</span>
+            </button>
 
             <button
               type="button"
