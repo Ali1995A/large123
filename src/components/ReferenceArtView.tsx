@@ -9,7 +9,7 @@ export function ReferenceArtView({ reference }: { reference: ReferenceObject }) 
 
   const src = useMemo(() => `/references/${reference.kind}.png`, [reference.kind]);
   const src2x = useMemo(() => `/references/${reference.kind}@2x.png`, [reference.kind]);
-  const version = "v=1";
+  const version = "v=2";
 
   if (pngFailed) return <ReferenceSvg reference={reference} />;
 
