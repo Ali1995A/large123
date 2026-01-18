@@ -313,6 +313,16 @@ function buildReference({
   const height = reference.heightCm * cubeSize;
   const group = new THREE.Group();
 
+  const outlineColor = 0xdb2e7b;
+  const outlineOpacity = 0.55;
+  const makeOutlineMaterial = () =>
+    new THREE.MeshBasicMaterial({
+      color: outlineColor,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: outlineOpacity,
+    });
+
   const pink = new THREE.MeshStandardMaterial({
     color: 0xffc1de,
     roughness: 0.55,
@@ -328,11 +338,37 @@ function buildReference({
     roughness: 0.75,
     metalness: 0,
   });
+  const ink = new THREE.MeshStandardMaterial({
+    color: 0x5b1834,
+    roughness: 0.65,
+    metalness: 0,
+  });
+  const sky = new THREE.MeshStandardMaterial({
+    color: 0xa7ddff,
+    roughness: 0.55,
+    metalness: 0,
+  });
+  const leaf = new THREE.MeshStandardMaterial({
+    color: 0x78d9a6,
+    roughness: 0.55,
+    metalness: 0,
+  });
 
-  const add = (mesh: THREE.Mesh) => {
+  const add = (mesh: THREE.Mesh, opts?: { outline?: boolean; outlineScale?: number }) => {
     mesh.castShadow = true;
     mesh.receiveShadow = false;
     group.add(mesh);
+
+    const wantsOutline = opts?.outline ?? true;
+    if (!wantsOutline) return;
+    const outline = new THREE.Mesh(mesh.geometry.clone(), makeOutlineMaterial());
+    outline.position.copy(mesh.position);
+    outline.quaternion.copy(mesh.quaternion);
+    outline.scale.copy(mesh.scale).multiplyScalar(opts?.outlineScale ?? 1.03);
+    outline.renderOrder = (mesh.renderOrder ?? 0) + 0.5;
+    outline.castShadow = false;
+    outline.receiveShadow = false;
+    group.add(outline);
   };
 
   const clampWorld = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
@@ -346,7 +382,7 @@ function buildReference({
   const baseR = sizeFromHeight(0.12, 4.5, 0.22);
   const base = new THREE.Mesh(new THREE.CylinderGeometry(baseR, baseR, 0.5 * cubeSize, 32), white);
   base.position.y = baseY + 0.25 * cubeSize;
-  add(base);
+  add(base, { outline: false });
 
   const kind = reference.kind;
 
@@ -355,6 +391,12 @@ function buildReference({
     const body = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), pink);
     body.position.y = s / 2 + 0.5 * cubeSize;
     add(body);
+
+    const pipR = Math.max(0.18 * cubeSize, s * 0.08);
+    const pipGeo = new THREE.SphereGeometry(pipR, 10, 8);
+    const pip = new THREE.Mesh(pipGeo, ink);
+    pip.position.set(0, body.position.y, s / 2 + pipR * 0.3);
+    add(pip, { outline: false });
   } else if (kind === "lego") {
     const w = sizeFromHeight(0.36, 4, 0.72);
     const d = sizeFromHeight(0.26, 3, 0.58);
@@ -362,12 +404,22 @@ function buildReference({
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), pink);
     body.position.y = h / 2 + 0.5 * cubeSize;
     add(body);
-    const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * cubeSize, 0.5 * cubeSize, 0.4 * cubeSize, 16), darker);
-    stud.position.set(-w * 0.25, h + 0.7 * cubeSize, 0);
-    add(stud);
-    const stud2 = stud.clone();
-    stud2.position.x = w * 0.25;
-    add(stud2);
+    const studR = Math.max(0.45 * cubeSize, Math.min(w, d) * 0.12);
+    const studH = 0.42 * cubeSize;
+    const studGeo = new THREE.CylinderGeometry(studR, studR, studH, 16);
+    const studs: [number, number][] = [
+      [-0.28, -0.18],
+      [0, -0.18],
+      [0.28, -0.18],
+      [-0.28, 0.18],
+      [0, 0.18],
+      [0.28, 0.18],
+    ];
+    for (const [sx, sz] of studs) {
+      const stud = new THREE.Mesh(studGeo, darker);
+      stud.position.set(w * sx, h + 0.5 * cubeSize + studH / 2, d * sz);
+      add(stud, { outlineScale: 1.02 });
+    }
   } else if (kind === "apple") {
     const r = Math.max(2.2 * cubeSize, height * 0.45);
     const body = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 18), pink);
@@ -376,12 +428,22 @@ function buildReference({
     add(body);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * cubeSize, 0.25 * cubeSize, 0.9 * cubeSize, 12), darker);
     stem.position.set(0, body.position.y + r * 0.95, 0);
-    add(stem);
+    add(stem, { outlineScale: 1.02 });
+    const leafGeo = new THREE.SphereGeometry(Math.max(0.55 * cubeSize, r * 0.18), 16, 12);
+    const leafBlob = new THREE.Mesh(leafGeo, leaf);
+    leafBlob.scale.set(1.2, 0.55, 0.95);
+    leafBlob.position.set(0.55 * cubeSize, stem.position.y + 0.35 * cubeSize, 0);
+    leafBlob.rotation.z = -0.6;
+    add(leafBlob, { outline: false });
   } else if (kind === "cup") {
     const r = Math.max(2.2 * cubeSize, height * 0.33);
     const cup = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, height, 28, 1, true), pink);
     cup.position.y = height / 2 + 0.5 * cubeSize;
     add(cup);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 0.92, 0.24 * cubeSize, 10, 40), white);
+    rim.position.set(0, cup.position.y + height / 2 - 0.15 * cubeSize, 0);
+    rim.rotation.x = Math.PI / 2;
+    add(rim, { outline: false });
     const handle = new THREE.Mesh(new THREE.TorusGeometry(r * 0.6, 0.25 * cubeSize, 10, 40), darker);
     handle.position.set(r * 0.95, height * 0.55 + 0.5 * cubeSize, 0);
     handle.rotation.y = Math.PI / 2;
@@ -397,6 +459,31 @@ function buildReference({
     const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 18, 14), darker);
     head.position.set(bodyH * 0.22, body.position.y + bodyR * 0.25, 0);
     add(head);
+
+    const earGeo = new THREE.ConeGeometry(headR * 0.42, headR * 0.55, 10);
+    const leftEar = new THREE.Mesh(earGeo, darker);
+    leftEar.position.set(head.position.x - headR * 0.42, head.position.y + headR * 0.85, headR * 0.1);
+    leftEar.rotation.z = 0.12;
+    add(leftEar, { outlineScale: 1.02 });
+    const rightEar = leftEar.clone();
+    rightEar.position.x = head.position.x + headR * 0.42;
+    rightEar.rotation.z = -0.12;
+    add(rightEar, { outlineScale: 1.02 });
+
+    const eyeGeo = new THREE.SphereGeometry(Math.max(0.22 * cubeSize, headR * 0.12), 10, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, ink);
+    leftEye.position.set(head.position.x - headR * 0.28, head.position.y + headR * 0.05, head.position.z + headR * 0.86);
+    add(leftEye, { outline: false });
+    const rightEye = leftEye.clone();
+    rightEye.position.x = head.position.x + headR * 0.28;
+    add(rightEye, { outline: false });
+
+    const tailR = Math.max(0.35 * cubeSize, bodyR * 0.4);
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(tailR, bodyR * 1.7, 6, 10), darker);
+    tail.position.set(-bodyH * 0.35, body.position.y - bodyR * 0.05, -bodyR * 0.35);
+    tail.rotation.z = 0.9;
+    tail.rotation.x = 0.4;
+    add(tail, { outlineScale: 1.02 });
   } else if (kind === "child") {
     const legH = height * 0.46;
     const torsoH = height * 0.34;
@@ -432,12 +519,31 @@ function buildReference({
     rightArm.position.x *= -1;
     rightArm.rotation.z *= -1;
     add(rightArm);
+
+    const eyeGeo = new THREE.SphereGeometry(Math.max(0.22 * cubeSize, headR * 0.09), 10, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, ink);
+    leftEye.position.set(-headR * 0.3, head.position.y + headR * 0.1, headR * 0.9);
+    add(leftEye, { outline: false });
+    const rightEye = leftEye.clone();
+    rightEye.position.x = headR * 0.3;
+    add(rightEye, { outline: false });
+
+    const shoeGeo = new THREE.BoxGeometry(limbR * 2.2, limbR * 0.9, limbR * 2.8);
+    const leftShoe = new THREE.Mesh(shoeGeo, white);
+    leftShoe.position.set(leftLeg.position.x, 0.5 * cubeSize + limbR * 0.45, limbR * 0.4);
+    add(leftShoe, { outline: false });
+    const rightShoe = leftShoe.clone();
+    rightShoe.position.x = rightLeg.position.x;
+    add(rightShoe, { outline: false });
   } else if (kind === "door") {
     const w = sizeFromHeight(0.22, 4.5, 0.36);
     const d = sizeFromHeight(0.04, 0.8, 0.1);
     const frame = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), pink);
     frame.position.y = height / 2 + 0.5 * cubeSize;
     add(frame);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.35 * cubeSize, w * 0.06), 12, 10), darker);
+    knob.position.set(w * 0.28, frame.position.y - height * 0.05, d / 2 + knob.geometry.parameters.radius * 0.6);
+    add(knob, { outline: false });
   } else if (kind === "car") {
     const baseW = sizeFromHeight(0.34, 8, 0.62);
     const baseD = sizeFromHeight(0.16, 4.5, 0.36);
@@ -449,6 +555,24 @@ function buildReference({
     const top = new THREE.Mesh(new THREE.BoxGeometry(baseW * 0.6, topH, baseD * 0.75), darker);
     top.position.y = base.position.y + baseH / 2 + topH / 2;
     add(top);
+    const wheelR = Math.max(0.75 * cubeSize, Math.min(baseW, baseD) * 0.12);
+    const wheelT = Math.max(0.55 * cubeSize, wheelR * 0.6);
+    const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelT, 14);
+    const positions: [number, number][] = [
+      [-0.35, -0.38],
+      [0.35, -0.38],
+      [-0.35, 0.38],
+      [0.35, 0.38],
+    ];
+    for (const [sx, sz] of positions) {
+      const wheel = new THREE.Mesh(wheelGeo, ink);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(baseW * sx, 0.5 * cubeSize + wheelR * 0.95, baseD * sz);
+      add(wheel, { outline: false });
+    }
+    const win = new THREE.Mesh(new THREE.BoxGeometry(baseW * 0.52, topH * 0.62, baseD * 0.72), white);
+    win.position.set(0, top.position.y + topH * 0.08, 0);
+    add(win, { outline: false });
   } else if (kind === "bus") {
     const w = sizeFromHeight(0.38, 10, 0.72);
     const d = sizeFromHeight(0.18, 5.5, 0.42);
@@ -458,7 +582,22 @@ function buildReference({
     add(body);
     const win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.75, h * 0.35, d * 0.92), white);
     win.position.y = body.position.y + h * 0.15;
-    add(win);
+    add(win, { outline: false });
+    const wheelR = Math.max(0.85 * cubeSize, d * 0.22);
+    const wheelT = Math.max(0.6 * cubeSize, wheelR * 0.6);
+    const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelT, 14);
+    const positions: [number, number][] = [
+      [-0.32, -0.44],
+      [0.32, -0.44],
+      [-0.32, 0.44],
+      [0.32, 0.44],
+    ];
+    for (const [sx, sz] of positions) {
+      const wheel = new THREE.Mesh(wheelGeo, ink);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(w * sx, 0.5 * cubeSize + wheelR * 0.95, d * sz);
+      add(wheel, { outline: false });
+    }
   } else if (kind === "house") {
     const wallH = height * 0.64;
     const roofH = height - wallH;
@@ -481,18 +620,38 @@ function buildReference({
       white,
     );
     door.position.set(0, 0.5 * cubeSize + doorH / 2, d / 2 + door.geometry.parameters.depth / 2);
-    add(door);
+    add(door, { outline: false });
+    const window = new THREE.Mesh(new THREE.BoxGeometry(w * 0.18, doorH * 0.55, d * 0.05), white);
+    window.position.set(-w * 0.22, 0.5 * cubeSize + wallH * 0.55, d / 2 + window.geometry.parameters.depth / 2);
+    add(window, { outline: false });
+    const window2 = window.clone();
+    window2.position.x = w * 0.22;
+    add(window2, { outline: false });
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(w * 0.12, roofH * 0.55, d * 0.12), darker);
+    chimney.position.set(-w * 0.22, roof.position.y + roofH * 0.12, -d * 0.12);
+    add(chimney);
   } else if (kind === "tree") {
     const trunkH = height * 0.55;
     const trunkR = sizeFromHeight(0.095, 1.4, 0.14);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.82, trunkR, trunkH, 18), darker);
     trunk.position.y = trunkH / 2 + 0.5 * cubeSize;
     add(trunk);
-    const crownH = height * 0.65;
-    const crownR = sizeFromHeight(0.33, 6.5, 0.55);
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(crownR, crownH, 20), pink);
-    crown.position.y = trunk.position.y + trunkH / 2 + crownH / 2;
-    add(crown);
+    const crownR = sizeFromHeight(0.3, 6.5, 0.55);
+    const crownGeo = new THREE.SphereGeometry(crownR, 18, 14);
+    const c1 = new THREE.Mesh(crownGeo, pink);
+    c1.position.set(0, trunk.position.y + trunkH / 2 + crownR * 1.1, 0);
+    add(c1);
+    const c2 = new THREE.Mesh(crownGeo, pink);
+    c2.scale.set(0.82, 0.82, 0.82);
+    c2.position.set(-crownR * 0.55, c1.position.y - crownR * 0.25, 0);
+    add(c2);
+    const c3 = c2.clone();
+    c3.position.x = crownR * 0.55;
+    add(c3);
+    const c4 = c2.clone();
+    c4.scale.set(0.72, 0.72, 0.72);
+    c4.position.set(0, c1.position.y + crownR * 0.35, -crownR * 0.3);
+    add(c4);
   } else if (kind === "building") {
     const w = sizeFromHeight(0.26, 14, 0.42);
     const d = sizeFromHeight(0.18, 10, 0.32);
@@ -538,7 +697,7 @@ function buildReference({
 
     const tip = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.55 * cubeSize, antennaR * 1.6), 16, 12), white);
     tip.position.y = antenna.position.y + antennaH / 2 + (tip.geometry as THREE.SphereGeometry).parameters.radius;
-    add(tip);
+    add(tip, { outline: false });
   } else if (kind === "mountain") {
     const baseR = sizeFromHeight(0.62, 18, 0.9);
     const baseH = Math.max(height * 0.06, 1.2 * cubeSize);
@@ -566,12 +725,19 @@ function buildReference({
     add(snow);
   } else if (kind === "earth") {
     const r = height / 2;
-    const globe = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 22), pink);
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 22), sky);
     globe.position.y = r + 0.5 * cubeSize;
     add(globe);
+    const land = new THREE.Mesh(new THREE.SphereGeometry(r * 1.002, 20, 16), leaf);
+    land.position.copy(globe.position);
+    land.scale.set(1, 1, 1);
+    land.material.transparent = true;
+    (land.material as THREE.MeshStandardMaterial).opacity = 0.45;
+    land.rotation.y = 0.8;
+    add(land, { outline: false });
   } else if (kind === "moonDistance") {
     const p1r = sizeFromHeight(0.06, 2.2, 0.12);
-    const p1 = new THREE.Mesh(new THREE.SphereGeometry(p1r, 18, 14), darker);
+    const p1 = new THREE.Mesh(new THREE.SphereGeometry(p1r, 18, 14), sky);
     p1.position.y = p1r + 0.5 * cubeSize;
     add(p1);
     const rodR = sizeFromHeight(0.01, 0.35, 0.04);
