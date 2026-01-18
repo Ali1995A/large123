@@ -305,12 +305,10 @@ function buildReference({
   parent,
   cubeSize,
   reference,
-  offsetX,
 }: {
   parent: THREE.Object3D;
   cubeSize: number;
   reference: ReferenceObject;
-  offsetX: number;
 }) {
   const height = reference.heightCm * cubeSize;
   const group = new THREE.Group();
@@ -337,15 +335,17 @@ function buildReference({
     group.add(mesh);
   };
 
+  const clampWorld = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const widthFromHeight = (ratio: number, minCubes: number, maxCubes: number) =>
+    clampWorld(height * ratio, minCubes * cubeSize, maxCubes * cubeSize);
+  const depthFromHeight = (ratio: number, minCubes: number, maxCubes: number) =>
+    clampWorld(height * ratio, minCubes * cubeSize, maxCubes * cubeSize);
+
   const baseY = 0;
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(5 * cubeSize, 5 * cubeSize, 0.5 * cubeSize, 24),
-    white,
-  );
+  const baseR = widthFromHeight(0.12, 4.5, 12);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(baseR, baseR, 0.5 * cubeSize, 32), white);
   base.position.y = baseY + 0.25 * cubeSize;
   add(base);
-
-  group.position.set(offsetX, 0, 0);
 
   const kind = reference.kind;
 
@@ -355,8 +355,8 @@ function buildReference({
     body.position.y = s / 2 + 0.5 * cubeSize;
     add(body);
   } else if (kind === "lego") {
-    const w = 4 * cubeSize;
-    const d = 3 * cubeSize;
+    const w = widthFromHeight(0.36, 4, 10);
+    const d = depthFromHeight(0.26, 3, 8);
     const h = Math.max(1.5 * cubeSize, height);
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), pink);
     body.position.y = h / 2 + 0.5 * cubeSize;
@@ -387,12 +387,14 @@ function buildReference({
     add(handle);
   } else if (kind === "cat") {
     const bodyH = height * 0.55;
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.6 * cubeSize, bodyH / 2, 6, 12), pink);
+    const bodyR = widthFromHeight(0.08, 1.2, 6);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyR, bodyH / 2, 6, 12), pink);
     body.position.y = bodyH / 2 + 0.5 * cubeSize;
     body.rotation.z = Math.PI / 2;
     add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(1.5 * cubeSize, 18, 14), darker);
-    head.position.set(2.6 * cubeSize, body.position.y + 0.6 * cubeSize, 0);
+    const headR = widthFromHeight(0.08, 1.2, 6);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 18, 14), darker);
+    head.position.set(bodyH * 0.22, body.position.y + bodyR * 0.25, 0);
     add(head);
   } else if (kind === "child") {
     const legH = height * 0.46;
@@ -401,7 +403,8 @@ function buildReference({
 
     const hipY = 0.5 * cubeSize + legH;
 
-    const legGeo = new THREE.CapsuleGeometry(0.75 * cubeSize, legH / 2, 8, 16);
+    const limbR = widthFromHeight(0.05, 0.7, 4);
+    const legGeo = new THREE.CapsuleGeometry(limbR, legH / 2, 8, 16);
     const leftLeg = new THREE.Mesh(legGeo, pink);
     leftLeg.position.set(-1.05 * cubeSize, 0.5 * cubeSize + legH / 2, 0);
     add(leftLeg);
@@ -409,10 +412,8 @@ function buildReference({
     rightLeg.position.x = 1.05 * cubeSize;
     add(rightLeg);
 
-    const torso = new THREE.Mesh(
-      new THREE.CapsuleGeometry(1.55 * cubeSize, torsoH / 2, 10, 18),
-      pink,
-    );
+    const torsoR = widthFromHeight(0.1, 1.6, 10);
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(torsoR, torsoH / 2, 10, 18), pink);
     torso.position.y = hipY + torsoH / 2;
     add(torso);
 
@@ -421,9 +422,9 @@ function buildReference({
     head.position.y = torso.position.y + torsoH / 2 + headR * 1.05;
     add(head);
 
-    const armGeo = new THREE.CapsuleGeometry(0.6 * cubeSize, torsoH * 0.44, 8, 14);
+    const armGeo = new THREE.CapsuleGeometry(limbR * 0.85, torsoH * 0.44, 8, 14);
     const leftArm = new THREE.Mesh(armGeo, darker);
-    leftArm.position.set(-(1.55 * cubeSize + 0.55 * cubeSize), torso.position.y + torsoH * 0.05, 0);
+    leftArm.position.set(-(torsoR + limbR), torso.position.y + torsoH * 0.05, 0);
     leftArm.rotation.z = 0.28;
     add(leftArm);
     const rightArm = leftArm.clone();
@@ -431,14 +432,14 @@ function buildReference({
     rightArm.rotation.z *= -1;
     add(rightArm);
   } else if (kind === "door") {
-    const w = 6 * cubeSize;
-    const d = 1.2 * cubeSize;
+    const w = widthFromHeight(0.22, 4.5, 14);
+    const d = depthFromHeight(0.04, 0.8, 3);
     const frame = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), pink);
     frame.position.y = height / 2 + 0.5 * cubeSize;
     add(frame);
   } else if (kind === "car") {
-    const baseW = 8 * cubeSize;
-    const baseD = 4.5 * cubeSize;
+    const baseW = widthFromHeight(0.34, 8, 22);
+    const baseD = depthFromHeight(0.16, 4.5, 14);
     const baseH = height * 0.35;
     const base = new THREE.Mesh(new THREE.BoxGeometry(baseW, baseH, baseD), pink);
     base.position.y = baseH / 2 + 0.5 * cubeSize;
@@ -448,8 +449,8 @@ function buildReference({
     top.position.y = base.position.y + baseH / 2 + topH / 2;
     add(top);
   } else if (kind === "bus") {
-    const w = 10 * cubeSize;
-    const d = 5.5 * cubeSize;
+    const w = widthFromHeight(0.38, 10, 26);
+    const d = depthFromHeight(0.18, 5.5, 16);
     const h = height;
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), pink);
     body.position.y = h / 2 + 0.5 * cubeSize;
@@ -461,8 +462,8 @@ function buildReference({
     const wallH = height * 0.64;
     const roofH = height - wallH;
 
-    const w = Math.max(10 * cubeSize, height * 0.42);
-    const d = Math.max(8 * cubeSize, w * 0.78);
+    const w = widthFromHeight(0.42, 10, 34);
+    const d = depthFromHeight(0.34, 8, 28);
 
     const base = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, d), pink);
     base.position.y = wallH / 2 + 0.5 * cubeSize;
@@ -482,20 +483,24 @@ function buildReference({
     add(door);
   } else if (kind === "tree") {
     const trunkH = height * 0.55;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.9 * cubeSize, 1.1 * cubeSize, trunkH, 18), darker);
+    const trunkR = widthFromHeight(0.06, 0.9, 8);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.82, trunkR, trunkH, 18), darker);
     trunk.position.y = trunkH / 2 + 0.5 * cubeSize;
     add(trunk);
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(4.2 * cubeSize, height * 0.65, 20), pink);
-    crown.position.y = trunk.position.y + trunkH / 2 + (height * 0.65) / 2;
+    const crownH = height * 0.65;
+    const crownR = widthFromHeight(0.22, 4.2, 30);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(crownR, crownH, 20), pink);
+    crown.position.y = trunk.position.y + trunkH / 2 + crownH / 2;
     add(crown);
   } else if (kind === "building") {
-    const w = 12 * cubeSize;
-    const d = 8 * cubeSize;
+    const w = widthFromHeight(0.18, 10, 32);
+    const d = depthFromHeight(0.12, 8, 24);
     const body = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), pink);
     body.position.y = height / 2 + 0.5 * cubeSize;
     add(body);
   } else if (kind === "mountain") {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(12 * cubeSize, height, 28), pink);
+    const r = widthFromHeight(0.24, 10, 36);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, height, 28), pink);
     cone.position.y = height / 2 + 0.5 * cubeSize;
     add(cone);
   } else if (kind === "earth") {
@@ -504,13 +509,16 @@ function buildReference({
     globe.position.y = r + 0.5 * cubeSize;
     add(globe);
   } else if (kind === "moonDistance") {
-    const p1 = new THREE.Mesh(new THREE.SphereGeometry(2.2 * cubeSize, 18, 14), darker);
-    p1.position.y = 2.2 * cubeSize + 0.5 * cubeSize;
+    const p1r = widthFromHeight(0.06, 2.2, 14);
+    const p1 = new THREE.Mesh(new THREE.SphereGeometry(p1r, 18, 14), darker);
+    p1.position.y = p1r + 0.5 * cubeSize;
     add(p1);
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * cubeSize, 0.35 * cubeSize, height, 14), pink);
+    const rodR = widthFromHeight(0.01, 0.35, 3.2);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(rodR, rodR, height, 14), pink);
     rod.position.y = height / 2 + 0.5 * cubeSize;
     add(rod);
-    const p2 = new THREE.Mesh(new THREE.SphereGeometry(1.6 * cubeSize, 18, 14), white);
+    const p2r = widthFromHeight(0.045, 1.6, 11);
+    const p2 = new THREE.Mesh(new THREE.SphereGeometry(p2r, 18, 14), white);
     p2.position.y = height + 0.5 * cubeSize;
     add(p2);
   }
@@ -817,7 +825,16 @@ export function CubeStage({
     const blockHalfWidth = (dims.widthCm * cubeSize) / 2;
     const offsetX = blockHalfWidth + 14 * cubeSize;
     rim.position.x = offsetX;
-    currentReference = buildReference({ parent: world, cubeSize, reference, offsetX });
+    currentReference = buildReference({ parent: world, cubeSize, reference });
+
+    // Place reference to the right of the block using its actual bounds (prevents overlap even when proportions change).
+    const refBounds = new THREE.Box3().setFromObject(currentReference);
+    const refSize = new THREE.Vector3();
+    refBounds.getSize(refSize);
+    const margin = 10 * cubeSize;
+    const refOffsetX = blockHalfWidth + refSize.x / 2 + margin;
+    currentReference.position.x = refOffsetX;
+    rim.position.x = refOffsetX;
 
     // Auto-frame to reduce empty space (especially on iPad).
     const bounds = new THREE.Box3();
