@@ -101,11 +101,13 @@ function buildInstancedUnitBlock({
   const mesh = new THREE.InstancedMesh(geometry.clone(), fill, count);
   mesh.castShadow = true;
   mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
 
   const outlineMesh = new THREE.InstancedMesh(geometry.clone(), outlineMat, count);
   outlineMesh.castShadow = false;
   outlineMesh.receiveShadow = false;
   outlineMesh.renderOrder = 1;
+  outlineMesh.frustumCulled = false;
 
   const { gridX, gridZ } = computeGridForCount(count);
   const halfX = (gridX * unitSide) / 2;
@@ -158,6 +160,7 @@ function buildInstancedUnitBlock({
       labelMesh.castShadow = false;
       labelMesh.receiveShadow = false;
       labelMesh.renderOrder = 3;
+      labelMesh.frustumCulled = false;
 
       const labelPos = new THREE.Vector3();
       const labelQuat = new THREE.Quaternion();
@@ -234,10 +237,12 @@ function buildReference({
   parent,
   cubeSize,
   reference,
+  offsetX,
 }: {
   parent: THREE.Object3D;
   cubeSize: number;
   reference: ReferenceObject;
+  offsetX: number;
 }) {
   const height = reference.heightCm * cubeSize;
   const group = new THREE.Group();
@@ -272,8 +277,7 @@ function buildReference({
   base.position.y = baseY + 0.25 * cubeSize;
   add(base);
 
-  const x = 16 * cubeSize;
-  group.position.set(x, 0, 0);
+  group.position.set(offsetX, 0, 0);
 
   const kind = reference.kind;
 
@@ -511,7 +515,7 @@ export function CubeStage({
     });
     const rim = new THREE.Mesh(rimGeo, rimMat);
     rim.rotation.x = Math.PI / 2;
-    rim.position.set(12 * sceneScale, 0.05, 0);
+    rim.position.set(0, 0.05, 0);
     world.add(rim);
 
     let currentBlock: THREE.Object3D | null = null;
@@ -665,7 +669,10 @@ export function CubeStage({
       currentBlock = buildAggregateBlock({ parent: world, cubeSize, dimensionsCm: dims });
     }
 
-    currentReference = buildReference({ parent: world, cubeSize, reference });
+    const blockHalfWidth = (dims.widthCm * cubeSize) / 2;
+    const offsetX = blockHalfWidth + 14 * cubeSize;
+    rim.position.x = offsetX;
+    currentReference = buildReference({ parent: world, cubeSize, reference, offsetX });
 
     const maxHeightUnits = Math.max(dims.heightCm, reference.heightCm) * cubeSize;
     baseTarget.set(0, maxHeightUnits * 0.32, 0);
