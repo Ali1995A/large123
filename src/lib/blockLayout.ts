@@ -48,6 +48,15 @@ export function computeGridForCount(count: number) {
   // 10 should feel like “10 pieces” but not become a long thin bar.
   if (count === 10) return { gridX: 5, gridZ: 2, layers: 1 };
 
+  // For small counts, keep a single-layer plate so the comparison stays intuitive.
+  // Otherwise, with huge unit cubes (e.g. 1km units), an "optimal" packing like 5×5×4
+  // would accidentally turn the block into a multi-kilometer-tall tower.
+  if (count < 100) {
+    const gridX = Math.min(10, Math.max(1, Math.round(Math.sqrt(count))));
+    const gridZ = Math.min(10, Math.max(1, Math.ceil(count / gridX)));
+    return { gridX, gridZ, layers: 1 };
+  }
+
   let best: { gridX: number; gridZ: number; layers: number } | null = null;
   let bestScore: [number, number, number, number] | null = null;
 
