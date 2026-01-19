@@ -1274,10 +1274,14 @@ export function CubeStage({
     bounds.getSize(size);
 
     baseTarget.copy(c);
-    const maxDim = Math.max(size.x, size.y, size.z, 1);
-    const fov = THREE.MathUtils.degToRad(camera.fov);
-    baseRadius = (maxDim * 0.62) / Math.tan(fov / 2);
-    baseRadius = clamp(baseRadius, 70, 520);
+    const vfov = THREE.MathUtils.degToRad(camera.fov);
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+    const maxVert = Math.max(size.y, 1);
+    const maxHoriz = Math.max(size.x, size.z, 1);
+    const radiusV = (maxVert * 0.62) / Math.tan(vfov / 2);
+    const radiusH = (maxHoriz * 0.62) / Math.tan(hfov / 2);
+    baseRadius = Math.max(radiusV, radiusH);
+    baseRadius = clamp(baseRadius, 70, 860);
 
     // If the scene is very “flat” (e.g. big plates like 10/100 at large units),
     // start from a lower angle so the thickness is visible.

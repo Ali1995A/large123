@@ -105,7 +105,7 @@ export function AppShell() {
         </header>
 
         <main className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-[32px] bg-white/85 shadow-sm ring-1 ring-rose-200">
+          <div className="relative min-h-[360px] flex-1 overflow-hidden rounded-[32px] bg-white/85 shadow-sm ring-1 ring-rose-200 sm:min-h-[420px] md:min-h-[520px]">
             <CubeStage value={step.value} reference={reference} />
 
             {!hasUserGesture && (
