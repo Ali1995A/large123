@@ -338,6 +338,17 @@ function buildAggregateBlock({
   return group;
 }
 
+function normalizeToGroundAndCenter(object: THREE.Object3D) {
+  const bounds = new THREE.Box3().setFromObject(object);
+  const center = new THREE.Vector3();
+  bounds.getCenter(center);
+
+  // Center X/Z, place on ground (Y).
+  object.position.x -= center.x;
+  object.position.z -= center.z;
+  object.position.y -= bounds.min.y;
+}
+
 function buildReference({
   parent,
   cubeSize,
@@ -1133,7 +1144,30 @@ export function CubeStage({
       currentBlock = buildAggregateBlock({ parent: world, cubeSize, dimensionsCm: dims });
     }
 
-    const blockHalfWidth = (dims.widthCm * cubeSize) / 2;
+    // If the block is extremely flat compared to the reference, stand it up so kids can see it.
+    if (currentBlock) {
+      const blockW = dims.widthCm * cubeSize;
+      const blockH = dims.heightCm * cubeSize;
+      const blockD = dims.depthCm * cubeSize;
+      const refH = reference.heightCm * cubeSize;
+      const heightRatio = blockH / Math.max(blockW, blockD, 1e-6);
+
+      if (refH > blockH * 3.2 && heightRatio < 0.16) {
+        if (blockW >= blockD) currentBlock.rotation.z = Math.PI / 2;
+        else currentBlock.rotation.x = -Math.PI / 2;
+      }
+
+      normalizeToGroundAndCenter(currentBlock);
+    }
+
+    // Use actual bounds for spacing (rotation can change the footprint).
+    let blockHalfWidth = (dims.widthCm * cubeSize) / 2;
+    if (currentBlock) {
+      const blockBounds = new THREE.Box3().setFromObject(currentBlock);
+      const blockSize = new THREE.Vector3();
+      blockBounds.getSize(blockSize);
+      blockHalfWidth = blockSize.x / 2;
+    }
     const offsetX = blockHalfWidth + 14 * cubeSize;
     rim.position.x = offsetX;
     currentReference = buildReference({ parent: world, cubeSize, reference });
