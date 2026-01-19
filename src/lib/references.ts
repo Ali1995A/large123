@@ -42,6 +42,17 @@ const REFERENCES: ReferenceObject[] = [
 ];
 
 export function chooseReference(heightCm: number): ReferenceObject {
+  // Keep a stable, relatable reference for kilometer-scale blocks.
+  // This prevents jumping to Earth too early (which makes the cubes hard to see).
+  const mountain1k = REFERENCES.find((r) => r.id === "mountain1k");
+  if (
+    mountain1k &&
+    heightCm >= mountain1k.heightCm * 0.95 &&
+    heightCm <= mountain1k.heightCm * 50
+  ) {
+    return mountain1k;
+  }
+
   for (const ref of REFERENCES) {
     if (heightCm <= ref.heightCm * 1.4) return ref;
   }
