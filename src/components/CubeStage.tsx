@@ -1241,7 +1241,10 @@ export function CubeStage({
     baseRadius = (maxDim * 0.62) / Math.tan(fov / 2);
     baseRadius = clamp(baseRadius, 70, 520);
 
-    phi = clamp(1.05, minPhi, maxPhi);
+    // If the scene is very “flat” (e.g. big plates like 10/100 at large units),
+    // start from a lower angle so the thickness is visible.
+    const heightRatio = size.y / Math.max(size.x, size.z, 1);
+    phi = clamp(heightRatio < 0.28 ? 1.28 : 1.05, minPhi, maxPhi);
     theta = 0.85;
     applyZoom();
     render();
