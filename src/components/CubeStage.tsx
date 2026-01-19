@@ -250,7 +250,7 @@ function buildInstancedUnitBlock({
   if (faceGridMesh) group.add(faceGridMesh);
 
   let labelMesh: THREE.InstancedMesh | null = null;
-  if (unit.unitValue >= 1000n && count <= 40) {
+  if (unit.unitValue >= 1000n) {
     const texture = createLabelTexture(formatLabel(unit.unitValue));
     if (texture) {
       const labelGeo = new THREE.PlaneGeometry(unitSide * 0.92, unitSide * 0.92);
@@ -261,7 +261,9 @@ function buildInstancedUnitBlock({
         depthWrite: false,
       });
 
-      labelMesh = new THREE.InstancedMesh(labelGeo, labelMat, count);
+      const maxLabels = 60;
+      const labelCount = Math.min(count, maxLabels);
+      labelMesh = new THREE.InstancedMesh(labelGeo, labelMat, labelCount);
       labelMesh.castShadow = false;
       labelMesh.receiveShadow = false;
       labelMesh.renderOrder = 3;
@@ -271,8 +273,10 @@ function buildInstancedUnitBlock({
       const labelQuat = new THREE.Quaternion();
       labelQuat.setFromEuler(new THREE.Euler(0, 0, 0));
 
-      for (let i = 0; i < count; i++) {
-        mesh.getMatrixAt(i, matrix);
+      const step = count <= labelCount ? 1 : count / labelCount;
+      for (let i = 0; i < labelCount; i++) {
+        const srcIndex = count <= labelCount ? i : Math.min(count - 1, Math.floor(i * step));
+        mesh.getMatrixAt(srcIndex, matrix);
         matrix.decompose(position, quaternion, scale);
         labelPos.set(position.x, position.y, position.z + unitSide / 2 + cubeSize * 0.03);
         matrix.compose(labelPos, labelQuat, new THREE.Vector3(1, 1, 1));
